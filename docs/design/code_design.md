@@ -333,7 +333,7 @@ transform solve gates poses by center residual.
 
 ## 10. Run time (2026-10-04, 4-core container, 40 poses x 3 frames at 640 x 480)
 
-The first integration took 577 s. Three changes brought it to about 45 s with
+The first integration took 577 s. Three changes brought it to 64 s with
 identical results: the design matrix is built once and the transform changes
 only the targets, so cross-validation, the robust iteration and every
 alternation round reuse Gram matrices (calibration/fast_solve.py); the exact
