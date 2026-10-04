@@ -92,11 +92,14 @@ class SampleTable:
     pose_ids: list[str]
     pose_kinds: list[str]
     frames_per_pose: list[int]
+    range_variance: np.ndarray | None = None   # (N,) per-pixel variance of the mean range, before pooling
+    retarget_misses: int = 0                   # rows whose ray missed the target at the last retargeting
 
     def subset(self, mask: np.ndarray) -> "SampleTable":
         return SampleTable(self.inputs[mask], self.target[mask], self.weight[mask], self.pose_index[mask],
                            self.pixel_index[mask], self.ray_direction[mask], self.measured_point[mask],
-                           self.predicted_cos_incidence[mask], self.pose_ids, self.pose_kinds, self.frames_per_pose)
+                           self.predicted_cos_incidence[mask], self.pose_ids, self.pose_kinds, self.frames_per_pose,
+                           None if self.range_variance is None else self.range_variance[mask])
 
     @property
     def n_samples(self) -> int:
@@ -187,7 +190,7 @@ def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: Rigi
     """Assemble the correction-sample table over every pose of the capture set."""
     block_weight = sample_weight_factor(params)
     rows_inputs, rows_target, rows_weight, rows_pose, rows_pixel = [], [], [], [], []
-    rows_ray, rows_point, rows_cos = [], [], []
+    rows_ray, rows_point, rows_cos, rows_var = [], [], [], []
     pose_ids, pose_kinds, frames_per_pose = [], [], []
     for pose_number, pose_id in enumerate(capture_set.pose_ids()):
         stack = capture_set.load_stack(pose_id)
@@ -213,7 +216,8 @@ def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: Rigi
             variance = pooled_variance(per_pixel, coverage.cos_incidence, usable, params)
             variance = np.where(np.isfinite(variance), variance, params.single_frame_variance_mm2)
         else:
-            variance = np.full(mean_depth.shape, params.single_frame_variance_mm2)
+            per_pixel = np.full(mean_depth.shape, params.single_frame_variance_mm2)
+            variance = per_pixel
         variance = np.maximum(variance, params.variance_floor_mm2)
         u_grid, v_grid = camera.pixel_grid()
         rays = camera.ray_directions()
@@ -230,6 +234,7 @@ def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: Rigi
         rows_ray.append(rays[sel])
         rows_point.append(rays[sel] * measured_range[sel][:, None])
         rows_cos.append(coverage.cos_incidence[sel])
+        rows_var.append(per_pixel[sel])
         pose_ids.append(pose_id)
         pose_kinds.append(record.target_kind)
         frames_per_pose.append(n_frames)
@@ -237,7 +242,39 @@ def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: Rigi
         raise ValueError("the capture set produced no samples")
     return SampleTable(np.concatenate(rows_inputs), np.concatenate(rows_target), np.concatenate(rows_weight),
                        np.concatenate(rows_pose), np.concatenate(rows_pixel), np.concatenate(rows_ray),
-                       np.concatenate(rows_point), np.concatenate(rows_cos), pose_ids, pose_kinds, frames_per_pose)
+                       np.concatenate(rows_point), np.concatenate(rows_cos), pose_ids, pose_kinds, frames_per_pose,
+                       np.concatenate(rows_var))
+
+
+def retarget_samples(samples: SampleTable, capture_set: CaptureSet, camera: PinholeCamera,
+                     sensor_to_positioner: RigidTransform, params: SampleParameters) -> SampleTable:
+    """
+    Recompute the residual targets of an EXISTING sample table under a new
+    sensor-to-positioner transform, keeping the rows (and therefore the design
+    matrix and the weights) fixed. Only the predicted range changes with the
+    transform; the measured inputs do not. A row whose ray no longer meets its
+    target under the new transform keeps its previous target and is counted.
+    The transform changes between alternation rounds are a fraction of a
+    millimeter, so such rows are rare.
+    """
+    target = samples.target.copy()
+    cos_incidence = samples.predicted_cos_incidence.copy()
+    misses = 0
+    for pose_number, pose_id in enumerate(samples.pose_ids):
+        rows = np.nonzero(samples.pose_index == pose_number)[0]
+        if rows.size == 0:
+            continue
+        record = capture_set.records_for(pose_id)[0]
+        coverage = predict_coverage_for(record, camera, sensor_to_positioner, params.coverage)
+        predicted = coverage.range_mm.ravel()[samples.pixel_index[rows]]
+        new_target = predicted - samples.inputs[rows, 2]
+        hit = np.isfinite(new_target)
+        misses += int((~hit).sum())
+        target[rows[hit]] = new_target[hit]
+        cos_incidence[rows[hit]] = coverage.cos_incidence.ravel()[samples.pixel_index[rows]][hit]
+    return SampleTable(samples.inputs, target, samples.weight, samples.pose_index, samples.pixel_index,
+                       samples.ray_direction, samples.measured_point, cos_incidence, samples.pose_ids,
+                       samples.pose_kinds, samples.frames_per_pose, samples.range_variance, misses)
 
 
 def build_noread_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTransform,

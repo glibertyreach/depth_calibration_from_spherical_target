@@ -20,7 +20,8 @@ import numpy as np
 from sphcal.calibration.extrinsic import ExtrinsicParameters, fit_sphere_center, rigid_component_of_displacements, \
     solve_sensor_to_positioner
 from sphcal.calibration.model_config import ModelConfiguration, build_model, default_configuration
-from sphcal.calibration.samples import SampleParameters, SampleTable, build_correction_samples
+from sphcal.calibration.fast_solve import FixedDesignSystem, HuberParameters, PoseFoldCrossValidator
+from sphcal.calibration.samples import SampleParameters, SampleTable, build_correction_samples, retarget_samples
 from sphcal.geometry.transforms import RigidTransform
 from sphcal.io.capture_set import CaptureSet
 from sphcal.spline.fit import RobustParameters, SmoothingGrid, fit_penalized_least_squares, fit_robust, select_smoothing_by_gcv
@@ -148,42 +149,33 @@ def _temporal_mean_points(xyz_stack: np.ndarray, valid_stack: np.ndarray, min_va
     return np.where(enough[..., None], mean, np.nan)
 
 
-def select_smoothing_by_pose_cv(model: SumOfTermsSpline, samples: SampleTable, selection: SmoothingSelection) -> SumOfTermsSpline:
+def select_smoothing_by_pose_cv(model: SumOfTermsSpline, samples: SampleTable, selection: SmoothingSelection,
+                                system: FixedDesignSystem | None = None) -> SumOfTermsSpline:
     """
     Choose each term's smoothing multiplier by K-fold cross-validation with
-    whole poses held out: for each term in turn and each grid value, fit (plain
-    penalized least squares) on the other folds and score the weighted RMS on
-    the held fold; keep the multiplier with the smallest total score.
+    whole poses held out: for each term in turn and each grid value, the
+    penalized least-squares fit on the other folds is scored by its weighted
+    mean squared residual on the held fold; the multiplier with the smallest
+    score is kept. All fits share the fixed design through per-fold Gram
+    matrices (fast_solve.PoseFoldCrossValidator), so one score costs one sparse
+    factorization per fold.
     """
     rng = np.random.default_rng(selection.seed)
     n_poses = len(samples.pose_ids)
     fold_of_pose = rng.permutation(n_poses) % selection.folds
     fold = fold_of_pose[samples.pose_index]
-    design = model.design(samples.inputs)
+    system = system or FixedDesignSystem(model.design(samples.inputs), samples.weight)
+    validator = PoseFoldCrossValidator(system, samples.target, fold)
     grid = selection.grid
     multipliers = np.logspace(grid.log10_min, grid.log10_max, grid.n_values)
     base = [list(term.smoothing) for term in model.terms]
     chosen = [1.0] * len(model.terms)
-
-    def cv_score() -> float:
-        penalty = model.penalty()
-        total, count = 0.0, 0.0
-        for k in range(selection.folds):
-            train, test = fold != k, fold == k
-            if not test.any() or not train.any():
-                continue
-            fit = fit_penalized_least_squares(design[train], samples.target[train], samples.weight[train], penalty)
-            residual = samples.target[test] - design[test] @ fit.coefficients
-            total += float(np.sum(samples.weight[test] * residual ** 2))
-            count += float(np.sum(samples.weight[test]))
-        return total / count
-
     for _ in range(grid.n_rounds):
         for t_index, term in enumerate(model.terms):
             best_score, best_multiplier = np.inf, chosen[t_index]
             for multiplier in multipliers:
                 term.smoothing = [b * multiplier for b in base[t_index]]
-                score = cv_score()
+                score = validator.score(model.penalty())
                 if score < best_score:
                     best_score, best_multiplier = score, multiplier
             chosen[t_index] = best_multiplier
@@ -194,7 +186,7 @@ def select_smoothing_by_pose_cv(model: SumOfTermsSpline, samples: SampleTable, s
 
 def _fit_model_on(samples: SampleTable, model: SumOfTermsSpline, params: CorrectionFitParameters,
                   select_smoothing: bool) -> SumOfTermsSpline:
-    """S3: the penalized robust fit, with an optional search over smoothing."""
+    """S3 for callers without a fixed-design system: the penalized robust fit, with an optional smoothing search."""
     if select_smoothing and params.smoothing.method == "pose_cv":
         model = select_smoothing_by_pose_cv(model, samples, params.smoothing)
     elif select_smoothing and params.smoothing.method == "gcv":
@@ -231,42 +223,57 @@ def _refit_transform(capture_set: CaptureSet, samples: SampleTable, model: SumOf
 
 def fit_correction(capture_set: CaptureSet, params: CorrectionFitParameters,
                    sensor_to_positioner: RigidTransform | None = None) -> CorrectionFitResult:
-    """Run S1 to S4 and evaluate on the held-out poses."""
+    """
+    Run S1 to S4 and evaluate on the held-out poses.
+
+    The design matrix is built once from the measured inputs of the training
+    samples; the alternation only re-targets the same rows under each new
+    transform and re-solves on the fixed design (fast_solve.FixedDesignSystem).
+    """
     training_ids, holdout_ids = split_poses(capture_set, params.holdout)
     training_set = subset_capture_set(capture_set, training_ids)
     transform = sensor_to_positioner or initial_transform(training_set, training_ids, params)
     first_stack = training_set.load_stack(training_ids[0])
-    width, height = first_stack.camera.width, first_stack.camera.height
-    rounds: list[AlternationRound] = []
-    model: SumOfTermsSpline | None = None
+    camera = first_stack.camera
+    width, height = camera.width, camera.height
     samples = build_correction_samples(training_set, transform, params.samples)
+    model = build_model(params.model, samples.inputs, width, height,
+                        metadata={"gauge": "sensor frame; the map's rigid component is folded into the transform"})
+    system = FixedDesignSystem(model.design(samples.inputs), samples.weight)
+    if params.smoothing.method == "pose_cv":
+        model = select_smoothing_by_pose_cv(model, samples, params.smoothing, system)
+    elif params.smoothing.method == "gcv":
+        model = select_smoothing_by_gcv(model, samples.inputs, samples.target, samples.weight, params.smoothing.grid)
+    penalty = model.penalty()
+    huber = HuberParameters(params.robust.huber_delta_in_sigmas, params.robust.max_iterations,
+                            params.robust.convergence_tolerance)
+    rounds: list[AlternationRound] = []
+    robust_weights = None
     for round_index in range(params.extrinsic.max_alternation_rounds):
-        if model is None:
-            model = build_model(params.model, samples.inputs, width, height,
-                                metadata={"gauge": "sensor frame; transform re-solved from corrected sphere centers"})
-        select = round_index == 0 or params.select_smoothing_every_round
-        model = _fit_model_on(samples, model, params, select)
-        residual_after = samples.target - model.evaluate(samples.inputs)
-        rms = float(np.sqrt(np.average(residual_after ** 2, weights=samples.weight)))
-        delta = model.evaluate(samples.inputs)
+        fit = system.robust_solve(samples.target, penalty, huber, robust_weights)
+        robust_weights = fit.robust_weights
+        model.coefficients = fit.coefficients
+        delta = system.design @ fit.coefficients
         t_rigid, omega_rigid = rigid_component_of_displacements(samples.measured_point,
-                                                                samples.ray_direction * delta[:, None], samples.weight)
+                                                                samples.ray_direction * delta[:, None],
+                                                                samples.weight * robust_weights)
         # Gauge (D-1): the map must carry no rigid motion. Its best-fitting rigid
-        # component G (p -> p + t + omega x p) is folded into the transform: a
-        # point the map would move by G and the old transform would then carry
-        # into the positioner frame is carried there by transform o G instead,
-        # and the next map fit, against targets rebuilt under the new transform,
-        # no longer needs that component. The fixed point is G = identity.
+        # component G (p -> p + t + omega x p) is folded into the transform, the
+        # targets are rebuilt under transform o G, and the next fit no longer
+        # needs that component. The fixed point is G = identity.
         rigid_part = RigidTransform.from_rotation_vector_degrees(np.degrees(omega_rigid), t_rigid)
         new_transform = transform.compose(rigid_part)
         dt, drot = new_transform.difference_from(transform)
-        rounds.append(AlternationRound(round_index, new_transform, dt, drot, rms, t_rigid, np.degrees(omega_rigid)))
+        rounds.append(AlternationRound(round_index, new_transform, dt, drot, fit.weighted_residual_rms,
+                                       t_rigid, np.degrees(omega_rigid)))
         transform = new_transform
-        converged = dt < params.extrinsic.convergence_translation_mm and drot < params.extrinsic.convergence_rotation_deg
-        samples = build_correction_samples(training_set, transform, params.samples)
-        if converged:
-            model = _fit_model_on(samples, model, params, select_smoothing=False)
+        samples = retarget_samples(samples, training_set, camera, transform, params.samples)
+        if dt < params.extrinsic.convergence_translation_mm and drot < params.extrinsic.convergence_rotation_deg:
             break
+    fit = system.robust_solve(samples.target, penalty, huber, robust_weights)
+    model.coefficients = fit.coefficients
+    model.metadata["effective_degrees_of_freedom"] = fit.effective_degrees_of_freedom
+    model.metadata["retarget_misses_last_round"] = samples.retarget_misses
     holdout_samples = None
     before = after = None
     if holdout_ids:
