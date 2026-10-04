@@ -31,7 +31,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 # ---- Working volume (sensor frame, mm). A frustum: lateral extent grows with z.
-DEPTH_RANGE_MM = (350.0, 950.0)
+DEPTH_RANGE_MM = (300.0, 1100.0)   # decided working volume: the full frustum
 HALF_FOV_H_DEG = 49.9 / 2.0           # specification, indicative
 HALF_FOV_V_DEG = 38.5 / 2.0
 CENTER_OVERHANG_MM = 50.0             # centers may lie this far outside the frustum: a partly visible sphere still yields samples
