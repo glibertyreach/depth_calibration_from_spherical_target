@@ -261,19 +261,33 @@ For the three-ball nest, the hardened balls can be ordinary grade-25 bearing bal
 
 ## Appendix B. Software reference: where the capture tools are in the repository
 
-The code that supports this procedure lives in the repository `depth_calibration_from_spherical_target`, in the Python package `sphcal/`. The three command-line tools are each a single file; together with the pose and manifest reading code they come to about 2,100 lines, which is too long to reproduce here, so this appendix gives their locations, their built-in help, and their default settings.
+The code that supports this procedure lives in the repository `depth_calibration_from_spherical_target`, in the Python package `sphcal/`. The three command-line tools are each a single file, but they import other modules of the package, so they cannot be copied out on their own. The complete set of files the three tools load is the 17 files below (about 3,400 lines, which is too long to reproduce here); this appendix gives their locations, the tools' built-in help, and their default settings.
 
-| File | Lines | What it does |
-|---|---|---|
-| `sphcal/cli/plan_poses.py` | 645 | Section 5 and 6: turns the bootstrap captures into a rough sensor position and writes the pose plan (`poses.csv`, `plan_summary.txt`, `plan.png`) |
-| `sphcal/cli/make_manifest.py` | 415 | Section 7: matches the pose log to the capture files, converts every orientation form to a matrix, writes the manifest |
-| `sphcal/cli/check_captures.py` | 386 | Section 8: the quick-look check of valid pixels, border contact, sphere and plane fits, and agreement with the commanded poses |
-| `sphcal/io/poses.py` | 454 | The manifest and pose-log record format, the readers and writers, and the orientation conversions used by the two tools above |
-| `sphcal/io/capture_set.py` | 77 | Groups the `.mc` files of a pose into frame stacks for the check tool and the fit |
-| `sphcal/io/matcloud.py` | 402 | Reads the sensor's `.mc` capture files (header and array) |
-| `tests/test_cli_tools.py` | 355 | Tests that exercise the three tools end to end on synthetic data; a worked example of the expected inputs |
+What to ship to the capture computer. Ship the whole `sphcal/` directory together with `requirements.txt` and the `tests/` directory, either as a clone of the repository or as a copy of those three items with the directory layout kept. The package is about 6,700 lines in all, so trimming it to the 17 files saves little and loses the self-test (the test in `tests/test_cli_tools.py` makes its synthetic captures with `sphcal/simulate/synthetic.py`, which is not otherwise needed). If a trimmed copy is nevertheless wanted, it must contain exactly the files marked "tools" in the table, with their directories and the six `__init__.py` files; Python finds the modules through the directory layout, so the files must stay where they are shown.
 
-The fit itself (`sphcal/cli/fit.py`, with the modules under `sphcal/calibration/` and `sphcal/spline/`) is not part of the capture procedure; the engineer runs it on the deliverables of section 10. The design document `docs/design/code_design.md` describes it.
+| File | Lines | Needed by | What it does |
+|---|---|---|---|
+| `sphcal/__init__.py` | 6 | tools | Package marker (a docstring only); Python needs it to import anything under `sphcal` |
+| `sphcal/cli/__init__.py` | 1 | tools | Package marker for the tools directory |
+| `sphcal/cli/plan_poses.py` | 645 | tools | Sections 5 and 6: turns the bootstrap captures into a rough sensor position and writes the pose plan (`poses.csv`, `plan_summary.txt`, `plan.png`) |
+| `sphcal/cli/make_manifest.py` | 415 | tools | Section 7: matches the pose log to the capture files, converts every orientation form to a matrix, writes the manifest |
+| `sphcal/cli/check_captures.py` | 386 | tools | Section 8: the quick-look check of valid pixels, border contact, sphere and plane fits, and agreement with the commanded poses |
+| `sphcal/io/__init__.py` | 1 | tools | Package marker |
+| `sphcal/io/poses.py` | 454 | tools | The manifest and pose-log record format, the readers and writers, and the orientation conversions used by the two tools above |
+| `sphcal/io/capture_set.py` | 77 | tools | Groups the `.mc` files of a pose into frame stacks for the check tool |
+| `sphcal/io/matcloud.py` | 402 | tools | Reads the sensor's `.mc` capture files (header and array) |
+| `sphcal/io/qt_datastream.py` | 431 | tools | Decodes the Qt serialization the `.mc` files are written in; used only through `matcloud.py` |
+| `sphcal/geometry/__init__.py` | 1 | tools | Package marker |
+| `sphcal/geometry/camera.py` | 87 | tools | Pinhole camera model: pixel to ray, point to pixel, from the file header |
+| `sphcal/geometry/transforms.py` | 93 | tools | Rigid transforms and the fit of a rigid transform to point pairs (the bootstrap of section 5) |
+| `sphcal/features/__init__.py` | 1 | tools | Package marker |
+| `sphcal/features/depth_features.py` | 208 | tools | Frame averaging and per-pixel depth statistics; the check tool uses the frame averaging |
+| `sphcal/calibration/__init__.py` | 1 | tools | Package marker |
+| `sphcal/calibration/extrinsic.py` | 179 | tools | Sphere center fit with outlier trimming and the sensor-to-robot transform solve, used by the check tool for its residuals |
+| `tests/test_cli_tools.py` | 355 | self-test | Exercises the three tools end to end on synthetic captures; a worked example of the expected inputs |
+| `sphcal/simulate/__init__.py`, `sphcal/simulate/synthetic.py` | 541 | self-test | Makes the synthetic captures the self-test uses |
+
+The fit itself (`sphcal/cli/fit.py`, with the rest of `sphcal/calibration/` and `sphcal/spline/`) is not part of the capture procedure; the engineer runs it on the deliverables of section 10. The design document `docs/design/code_design.md` describes it.
 
 Installing and running. The tools need Python 3.10 or later and the packages in `requirements.txt` (numpy, scipy, matplotlib). From the repository's top directory:
 
@@ -282,7 +296,7 @@ pip install -r requirements.txt
 python3 -m pytest -q tests/test_cli_tools.py
 ```
 
-The second line runs the tools' tests and should print only passes. Every tool is run as a module from the top directory, as in the commands of sections 5, 7 and 8, and every tool prints the help below with `--help`.
+The second line runs the tools' self-test and should print only passes; it needs the `simulate` files marked "self-test" in the table. Every tool is run as a module from the top directory, as in the commands of sections 5, 7 and 8, and every tool prints the help below with `--help`.
 
 Default settings. The plan tool's defaults are: depth range 300 to 1,100 mm; near sphere radius 40 mm, far sphere radius 80 mm, switching at 550 mm with a 50 mm overlap band; grid spacing 1.5 radii; 80 percent field fill; 3 near and 4 far depth planes; board half-size 120 x 90 mm at depths 350, 550, 800 and 1,050 mm, tilts 0, 20 and 40 degrees about two azimuths (0 and 90 degrees), 2 lateral positions at 50 percent field fill; 10 pixel edge margin; 20 percent hold-out; bootstrap residual warning at 5 mm. The commands in section 5 override the radii, the field fill and the board size for the fixtures of section 1. The check tool's defaults are: sphere fit or center residual warning at 2 mm; plane residual warning at 2 mm; minimum valid fraction 0.5; border margin 4 pixels; board normal warning at 2 degrees. The manifest tool writes CSV unless `--format json` is given.
 

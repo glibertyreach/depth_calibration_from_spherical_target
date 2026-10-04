@@ -45,9 +45,9 @@ from pathlib import Path
 
 import numpy as np
 
-from sphcal.calibration.correction import _temporal_mean_points
 from sphcal.calibration.extrinsic import SphereFitParameters, TransformSolveParameters, fit_sphere_center, \
     solve_sensor_to_positioner
+from sphcal.features.depth_features import temporal_mean_points
 from sphcal.geometry.transforms import RigidTransform
 from sphcal.io.capture_set import CaptureSet
 from sphcal.io.poses import TARGET_KIND_SPHERE, load_manifest
@@ -185,7 +185,7 @@ def check_pose(capture_set: CaptureSet, pose_id: str, params: CheckParameters) -
     except (OSError, ValueError, KeyError) as error:
         check.flags.append(f"{FLAG_UNREADABLE}: {error}")
         return check
-    mean_xyz = _temporal_mean_points(stack.xyz, stack.valid, params.min_valid_fraction)
+    mean_xyz = temporal_mean_points(stack.xyz, stack.valid, params.min_valid_fraction)
     mean_valid = np.isfinite(mean_xyz[..., 2])
     points = mean_xyz[mean_valid].astype(np.float64)
     check.frames = stack.xyz.shape[0]

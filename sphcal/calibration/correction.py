@@ -22,6 +22,7 @@ from sphcal.calibration.extrinsic import ExtrinsicParameters, fit_sphere_center,
 from sphcal.calibration.model_config import ModelConfiguration, build_model, default_configuration
 from sphcal.calibration.fast_solve import FixedDesignSystem, HuberParameters, PoseFoldCrossValidator
 from sphcal.calibration.samples import SampleParameters, SampleTable, build_correction_samples, retarget_samples
+from sphcal.features.depth_features import temporal_mean_points
 from sphcal.geometry.transforms import RigidTransform
 from sphcal.io.capture_set import CaptureSet
 from sphcal.spline.fit import RobustParameters, SmoothingGrid, fit_penalized_least_squares, fit_robust, select_smoothing_by_gcv
@@ -129,7 +130,7 @@ def initial_transform(capture_set: CaptureSet, pose_ids: list[str], params: Corr
         if record.target_kind != "sphere":
             continue
         stack = capture_set.load_stack(pid)
-        mean_xyz = _temporal_mean_points(stack.xyz, stack.valid, params.samples.min_temporal_valid_fraction)
+        mean_xyz = temporal_mean_points(stack.xyz, stack.valid, params.samples.min_temporal_valid_fraction)
         points = mean_xyz[np.isfinite(mean_xyz[..., 2])]
         center = fit_sphere_center(points, record.sphere_radius_mm, params.extrinsic.sphere_fit)
         centers_sensor.append(center)
@@ -140,13 +141,6 @@ def initial_transform(capture_set: CaptureSet, pose_ids: list[str], params: Corr
                                       params=params.extrinsic.transform_solve)
 
 
-def _temporal_mean_points(xyz_stack: np.ndarray, valid_stack: np.ndarray, min_valid_fraction: float) -> np.ndarray:
-    """Per-pixel mean point over the frames in which the pixel was valid; NaN elsewhere."""
-    count = valid_stack.sum(axis=0)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        mean = (xyz_stack * valid_stack[..., None]).sum(axis=0) / count[..., None]
-    enough = count >= min_valid_fraction * valid_stack.shape[0]
-    return np.where(enough[..., None], mean, np.nan)
 
 
 def select_smoothing_by_pose_cv(model: SumOfTermsSpline, samples: SampleTable, selection: SmoothingSelection,

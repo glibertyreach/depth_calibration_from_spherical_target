@@ -100,6 +100,23 @@ def temporal_statistics(depth_stack, valid_stack, min_valid_fraction) -> Tempora
         read_fraction=read_fraction)
 
 
+def temporal_mean_points(xyz_stack: np.ndarray, valid_stack: np.ndarray, min_valid_fraction: float) -> np.ndarray:
+    """
+    Per-pixel mean 3-D point over the frames in which the pixel was valid.
+
+    xyz_stack (F, H, W, 3) camera-frame points in mm; valid_stack (F, H, W) bool.
+    The mean is NaN where fewer than min_valid_fraction of the F frames are
+    valid. This is the point-cloud counterpart of temporal_statistics, shared
+    by the capture check tool and the fit so that both average frames the same
+    way.
+    """
+    count = valid_stack.sum(axis=0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = (xyz_stack * valid_stack[..., None]).sum(axis=0) / count[..., None]
+    enough = count >= min_valid_fraction * valid_stack.shape[0]
+    return np.where(enough[..., None], mean, np.nan)
+
+
 def _window_sum(array: np.ndarray, half: int, power_u: int, power_v: int) -> np.ndarray:
     """
     Sum over the (2 half + 1)^2 window centered on each pixel of
