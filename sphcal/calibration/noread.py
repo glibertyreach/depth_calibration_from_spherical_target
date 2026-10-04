@@ -2,6 +2,16 @@
 The no-read probability map (step S5): a penalized logistic sum-of-terms
 B-spline fitted to the per-pixel read fraction over every pixel the known
 targets cover, indexed by PREDICTED geometry.
+
+Known limitation of the reported onset angle. The map's slope inputs are the
+window-estimated slopes of the predicted depth image, the same estimator the
+correction map uses. On a curved target the window smooths the slope near the
+limb, so a given window slope corresponds to a higher true incidence there,
+and the onset converted from window slope by atan reads high on spheres (about
+8 degrees high at 55 degrees on the full-resolution synthetic run with a
+13-pixel window). The onset is exact on planar targets, where the window slope
+equals the true slope; a tilted-board sweep is therefore the reference for the
+onset angle, and the sphere data supply the azimuth and position dependence.
 """
 from __future__ import annotations
 

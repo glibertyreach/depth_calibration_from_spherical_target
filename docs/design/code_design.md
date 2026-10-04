@@ -307,3 +307,26 @@ value is the sum over terms.
 - Synthetic: a dataset of a few poses is written and read back through CaptureSet; truth is consistent.
 - End to end (integrator): fit on synthetic data recovers the injected field on held-out poses to a stated
   tolerance, and the no-read map recovers the injected onset.
+
+## 9. Status after the first integration (2026-10-04)
+
+All modules exist and 111 tests pass. On a full-resolution synthetic campaign
+(40 poses of two sphere radii and tilted boards, 3 frames each, indicative
+sensor model, injected non-physical error field) the held-out range residual
+fell from 0.24 mm to 0.036 mm against a noise floor of about 0.03 mm, held-out
+sphere-center errors from about 1 mm to 0.06 to 0.33 mm, and held-out board
+normal bias from 0.10 to 0.15 degrees to under 0.02 degrees; the gauge
+alternation converged in nine rounds. The no-read onset converted from window
+slope reads about 8 degrees high on spheres (see the noread module docstring);
+planar targets give it exactly.
+
+Deviations from the first version of this document that the integration
+forced: per-pixel variances are pooled over incidence bins within a pose
+(three frames cannot support per-pixel weights); smoothing is selected by
+cross-validation with whole poses held out rather than by GCV, which counts
+correlated native pixels as independent; samples are taken at one pixel per
+effective block (the correction is still evaluated at every native pixel); the
+transform is re-solved from the map's rigid component rather than from refitted
+sphere centers, which gives the alternation a definite fixed point; the
+hold-out split is stratified by target kind; sphere fits are trimmed and the
+transform solve gates poses by center residual.
