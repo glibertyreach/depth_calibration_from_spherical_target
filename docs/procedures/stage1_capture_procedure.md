@@ -34,6 +34,8 @@ Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures; figure 2 (sectio
 | Dial indicator with magnetic base | 0.01 mm resolution | Board runout check |
 | Capture computer | Runs the sensor's capture software, writes `.mc` files with the sensor's own name in the file name | Must have at least 10 GB free per 1,000 frames |
 
+Appendix A lists suppliers for the spheres and the board; appendix B says where the software named in sections 5 to 8 is and how to install it.
+
 Optional: a certified two-sphere bar (two matte spheres on a rigid bar, center-to-center distance known to 0.02 mm). It gives an independent check of the result (section 9).
 
 ## 2. Before anything else
@@ -227,3 +229,189 @@ If a certified ball bar is available: mount it on the flange in place of a spher
 - Fingerprints or gloss on the sphere or board: wipe with isopropyl alcohol; a shiny spot returns a bright highlight and a bad read.
 - Letting the stem point toward the sensor: the sphere must hide the stem. The plan sets the orientation for this; do not override it.
 - Mixing up the two spheres' radii in the pose log.
+
+---
+
+## Appendix A. Suppliers for the spheres and the board
+
+This list was assembled from the suppliers' web pages in October 2026. It is a starting point, not an endorsement: confirm the diameter, the finish, the certificate, and the mounting thread with the supplier before ordering, because catalogs change and several of the items below are made to order. The sizes this procedure asks for (3 inch and 6 inch matte spheres with a threaded hole) are not stock items at most metrology suppliers, whose standard reference spheres are either small (up to about 50 mm, for probing machines) or large but magnet-based (145 to 200 mm, for laser scanners).
+
+Spheres, made to order in the sizes needed:
+
+- Bal-tec, a division of Micro Surface Engineering, Los Angeles, California (precisionballs.com). Custom precision balls in any material and size, including hollow spheres and satin (non-glossy) finishes in titanium and other metals; threaded mounting holes and stems on request. The most direct route to a 3 inch and a 6 inch matte sphere with a certificate.
+- RGP Balls, Italy (rgpballs.com), and Industrial Tectonics, Dexter, Michigan (itiball.com): precision ceramic and steel balls, large diameters on request. Confirm the largest ceramic diameter they will make; 6 inch may exceed it.
+- Morgan Advanced Materials: large ceramic balls (alumina, zirconia) for grinding and valves; a 6 inch alumina ball is a stock-like item from such makers, but the sphericity grade and the certificate must be asked for, and a blind hole must be bonded or drilled by a ceramics shop.
+
+Spheres, stock items, useful for a smaller sphere A, the three-ball nest or a ball bar:
+
+- MetrologyWorks (metrologyworks.com): matte-finish 440C stainless reference spheres, 0.5, 1 and 1.5 inch diameter, with a female M8 x 1.25 thread. The finish is the one wanted here; the sizes are below the 3 inch recommended for sphere A, so use them only if a smaller near-range sphere is accepted by the engineer.
+- Hexagon Manufacturing Intelligence: ceramic calibration spheres, 15 to 25 mm, M8 thread, with an ISO/IEC 17025 certificate. Suitable for the nest balls; too small for the targets.
+- Renishaw: datum spheres in polished tungsten carbide, 12 to 25 mm. The polished finish is unsuitable for the targets (bright highlight, bad reads); fine for the nest.
+- Laserscanning Europe and Goecke (Germany), Tiger Supplies (United States): 145 mm and 200 mm matte reference spheres for laser scanners, on a magnetic base, sold without a certificate at the 0.01 mm level in most listings. Close to the sphere B size; ask for the sphericity figure before using one as sphere B, and replace the magnetic base with a threaded stem.
+
+A low-cost alternative for either sphere is a bearing-grade chrome steel ball (grade 25 or better) from Bal-tec or an industrial supplier, drilled and tapped by a machine shop, bead-blasted, and sprayed with a thin matte gray coating. The coating adds its thickness to the radius (typically 0.02 to 0.05 mm per coat), so the diameter must be measured after coating, with a micrometer at several orientations, and that value, not the ball's certificate, goes in the pose log. Weight is the other constraint: a solid 6 inch steel ball weighs about 14.5 kg and is not recommended on a stem; alumina is about half that, and a hollow or aluminum sphere lighter again (section 3a).
+
+Board:
+
+- McMaster-Carr: MIC-6 cast aluminum tooling plate, sold with mill certificates and a stated flatness (about 0.13 mm over the sheet for the thicknesses of interest). That is coarser than the 0.05 mm asked for here, so order the plate oversize and have a local grinding shop finish-grind the front face flat to 0.05 mm, then bead-blast and matte-paint it. Alternatively, ask the grinding shop for a flatness report directly.
+- Any float-glass or optical-flat supplier (Edmund Optics sells ground and polished flats): a 10 to 15 mm float glass plate is flat to better than 0.05 mm over 200 mm as delivered; it must be matte-painted on the front face and bonded or clamped to the board adapter. Glass is the better choice when no grinding shop is at hand.
+- A small granite surface plate (Starrett or Mitutoyo, grade A or AA) is flat to a few micrometers but black and heavy; it works if the front is painted matte light gray and the robot carries the weight (a 200 x 150 x 50 mm plate is about 4 kg).
+
+For the three-ball nest, the hardened balls can be ordinary grade-25 bearing balls (McMaster-Carr, Bal-tec); the nest's quality comes from the balls being rigidly fixed, not from their grade.
+
+## Appendix B. Software reference: where the capture tools are in the repository
+
+The code that supports this procedure lives in the repository `depth_calibration_from_spherical_target`, in the Python package `sphcal/`. The three command-line tools are each a single file; together with the pose and manifest reading code they come to about 2,100 lines, which is too long to reproduce here, so this appendix gives their locations, their built-in help, and their default settings.
+
+| File | Lines | What it does |
+|---|---|---|
+| `sphcal/cli/plan_poses.py` | 645 | Section 5 and 6: turns the bootstrap captures into a rough sensor position and writes the pose plan (`poses.csv`, `plan_summary.txt`, `plan.png`) |
+| `sphcal/cli/make_manifest.py` | 415 | Section 7: matches the pose log to the capture files, converts every orientation form to a matrix, writes the manifest |
+| `sphcal/cli/check_captures.py` | 386 | Section 8: the quick-look check of valid pixels, border contact, sphere and plane fits, and agreement with the commanded poses |
+| `sphcal/io/poses.py` | 454 | The manifest and pose-log record format, the readers and writers, and the orientation conversions used by the two tools above |
+| `sphcal/io/capture_set.py` | 77 | Groups the `.mc` files of a pose into frame stacks for the check tool and the fit |
+| `sphcal/io/matcloud.py` | 402 | Reads the sensor's `.mc` capture files (header and array) |
+| `tests/test_cli_tools.py` | 355 | Tests that exercise the three tools end to end on synthetic data; a worked example of the expected inputs |
+
+The fit itself (`sphcal/cli/fit.py`, with the modules under `sphcal/calibration/` and `sphcal/spline/`) is not part of the capture procedure; the engineer runs it on the deliverables of section 10. The design document `docs/design/code_design.md` describes it.
+
+Installing and running. The tools need Python 3.10 or later and the packages in `requirements.txt` (numpy, scipy, matplotlib). From the repository's top directory:
+
+```
+pip install -r requirements.txt
+python3 -m pytest -q tests/test_cli_tools.py
+```
+
+The second line runs the tools' tests and should print only passes. Every tool is run as a module from the top directory, as in the commands of sections 5, 7 and 8, and every tool prints the help below with `--help`.
+
+Default settings. The plan tool's defaults are: depth range 300 to 1,100 mm; near sphere radius 40 mm, far sphere radius 80 mm, switching at 550 mm with a 50 mm overlap band; grid spacing 1.5 radii; 80 percent field fill; 3 near and 4 far depth planes; board half-size 120 x 90 mm at depths 350, 550, 800 and 1,050 mm, tilts 0, 20 and 40 degrees about two azimuths (0 and 90 degrees), 2 lateral positions at 50 percent field fill; 10 pixel edge margin; 20 percent hold-out; bootstrap residual warning at 5 mm. The commands in section 5 override the radii, the field fill and the board size for the fixtures of section 1. The check tool's defaults are: sphere fit or center residual warning at 2 mm; plane residual warning at 2 mm; minimum valid fraction 0.5; border margin 4 pixels; board normal warning at 2 degrees. The manifest tool writes CSV unless `--format json` is given.
+
+Output of `python3 -m sphcal.cli.plan_poses --help`:
+
+```
+usage: plan_poses.py [-h] --sensor-in-base PATH [--camera PATH]
+                     [--fov-deg H V] [--image-size W H]
+                     [--depth-min-mm DEPTH_MIN_MM]
+                     [--depth-max-mm DEPTH_MAX_MM]
+                     [--near-radius-mm NEAR_RADIUS_MM]
+                     [--far-radius-mm FAR_RADIUS_MM]
+                     [--radius-switch-depth-mm RADIUS_SWITCH_DEPTH_MM]
+                     [--overlap-band-mm OVERLAP_BAND_MM]
+                     [--spacing-in-radii SPACING_IN_RADII]
+                     [--fov-fill FOV_FILL]
+                     [--depth-planes-near DEPTH_PLANES_NEAR]
+                     [--depth-planes-far DEPTH_PLANES_FAR]
+                     [--board-half-size-mm HALF_WIDTH HALF_HEIGHT]
+                     [--board-depths-mm BOARD_DEPTHS_MM [BOARD_DEPTHS_MM ...]]
+                     [--board-tilts-deg BOARD_TILTS_DEG [BOARD_TILTS_DEG ...]]
+                     [--board-azimuths-deg BOARD_AZIMUTHS_DEG [BOARD_AZIMUTHS_DEG ...]]
+                     [--board-lateral-positions BOARD_LATERAL_POSITIONS]
+                     [--board-lateral-fill BOARD_LATERAL_FILL]
+                     [--edge-margin-px EDGE_MARGIN_PX]
+                     [--holdout-fraction HOLDOUT_FRACTION] [--seed SEED]
+                     [--bootstrap-residual-warn-mm BOOTSTRAP_RESIDUAL_WARN_MM]
+                     --out DIR
+
+Plan the robot poses of a stage-1 capture: sphere and board poses spread
+through the depth sensor's working volume, written as poses.csv,
+plan_summary.txt and plan.png.
+
+options:
+  -h, --help            show this help message and exit
+  --sensor-in-base PATH
+                        JSON with {"matrix": [16 floats, row-major 4x4 sensor-
+                        to-base]} or {"bootstrap": [{"pose_id", "base_xyz",
+                        "sensor_xyz"}, ... at least 3 non-collinear]}
+  --camera PATH         .mc capture file whose header gives fx, fy, cx, cy and
+                        whose array gives the image size
+  --fov-deg H V         full horizontal and vertical field of view in degrees
+                        (with --image-size)
+  --image-size W H      image width and height in pixels
+  --depth-min-mm DEPTH_MIN_MM
+  --depth-max-mm DEPTH_MAX_MM
+  --near-radius-mm NEAR_RADIUS_MM
+  --far-radius-mm FAR_RADIUS_MM
+  --radius-switch-depth-mm RADIUS_SWITCH_DEPTH_MM
+  --overlap-band-mm OVERLAP_BAND_MM
+                        both radii are planned in this band below the switch
+                        depth
+  --spacing-in-radii SPACING_IN_RADII
+                        grid spacing as a multiple of the radius in use
+  --fov-fill FOV_FILL   fraction of the half field covered by sphere centers
+                        at each depth
+  --depth-planes-near DEPTH_PLANES_NEAR
+  --depth-planes-far DEPTH_PLANES_FAR
+  --board-half-size-mm HALF_WIDTH HALF_HEIGHT
+  --board-depths-mm BOARD_DEPTHS_MM [BOARD_DEPTHS_MM ...]
+  --board-tilts-deg BOARD_TILTS_DEG [BOARD_TILTS_DEG ...]
+  --board-azimuths-deg BOARD_AZIMUTHS_DEG [BOARD_AZIMUTHS_DEG ...]
+  --board-lateral-positions BOARD_LATERAL_POSITIONS
+                        board positions spread across the field at each depth
+  --board-lateral-fill BOARD_LATERAL_FILL
+                        fraction of the half field covered by board centers at
+                        each depth
+  --edge-margin-px EDGE_MARGIN_PX
+                        board corners must project this far inside the image
+  --holdout-fraction HOLDOUT_FRACTION
+  --seed SEED           seed of the random held-out subset
+  --bootstrap-residual-warn-mm BOOTSTRAP_RESIDUAL_WARN_MM
+  --out DIR             output directory
+```
+
+Output of `python3 -m sphcal.cli.make_manifest --help`:
+
+```
+usage: make_manifest.py [-h] --pose-log PATH --captures DIR
+                        [--format {csv,json}] --out PATH [--strict]
+
+Build the capture manifest from a pose log (CSV) and a directory of .mc
+capture files. The poses.csv written by plan_poses is accepted as a pose log.
+
+options:
+  -h, --help           show this help message and exit
+  --pose-log PATH      CSV with pose_id, kind, radius_mm, half_width_mm,
+                       half_height_mm, x_mm, y_mm, z_mm, rotation_type, r1..r4
+                       (rotation_type: none, quaternion_wxyz, quaternion_xyzw,
+                       euler_zyx_deg, euler_xyz_deg, fixed_xyz_deg,
+                       rotvec_deg, matrix)
+  --captures DIR       directory of .mc files named <pose_id>_Index<frame>.mc
+  --format {csv,json}  manifest format
+  --out PATH           manifest file to write
+  --strict             treat warnings (missing or unmatched captures, non-unit
+                       quaternions) as errors
+```
+
+Output of `python3 -m sphcal.cli.check_captures --help`:
+
+```
+usage: check_captures.py [-h] --manifest PATH
+                         [--sphere-residual-warn-mm SPHERE_RESIDUAL_WARN_MM]
+                         [--plane-residual-warn-mm PLANE_RESIDUAL_WARN_MM]
+                         [--min-valid-fraction MIN_VALID_FRACTION]
+                         [--border-margin-px BORDER_MARGIN_PX]
+                         [--board-normal-warn-deg BOARD_NORMAL_WARN_DEG]
+                         [--out PATH]
+
+Quick-look check of a capture set before the long fit: valid pixels, border
+contact, sphere and plane fit residuals, and agreement with the commanded
+poses.
+
+options:
+  -h, --help            show this help message and exit
+  --manifest PATH       manifest CSV or JSON
+  --sphere-residual-warn-mm SPHERE_RESIDUAL_WARN_MM
+                        flag a sphere whose surface fit RMS or center residual
+                        exceeds this
+  --plane-residual-warn-mm PLANE_RESIDUAL_WARN_MM
+                        flag a board whose RMS distance to its fitted plane
+                        exceeds this
+  --min-valid-fraction MIN_VALID_FRACTION
+                        flag a pose valid in a smaller fraction of its frames
+  --border-margin-px BORDER_MARGIN_PX
+                        valid pixels within this many pixels of the border
+                        mean the target is cut off
+  --board-normal-warn-deg BOARD_NORMAL_WARN_DEG
+                        flag a board whose fitted and commanded normals differ
+                        by more than this
+  --out PATH            write a JSON report here
+```
