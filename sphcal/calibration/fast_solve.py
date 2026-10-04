@@ -93,7 +93,7 @@ class FixedDesignSystem:
         return float(np.trace(factor.solve(np.asarray(gram.todense()))))
 
     def robust_solve(self, y: np.ndarray, penalty: sp.spmatrix, params: HuberParameters,
-                     initial_robust_weights: np.ndarray | None = None) -> FastFitResult:
+                     initial_robust_weights: np.ndarray | None = None, compute_edof: bool = False) -> FastFitResult:
         """
         Huber IRLS. Each iteration the Gram matrix is G_base minus the
         contribution of the rows whose Huber factor h is below one,
@@ -123,7 +123,7 @@ class FixedDesignSystem:
                 break
         residual = y - self.design @ coefficients
         rms = float(np.sqrt(np.average(residual ** 2, weights=self.weights * h)))
-        edof = self.effective_degrees_of_freedom(gram, factor)
+        edof = self.effective_degrees_of_freedom(gram, factor) if compute_edof else float("nan")
         return FastFitResult(coefficients, h, iterations, rms, edof)
 
 

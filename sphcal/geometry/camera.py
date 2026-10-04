@@ -13,6 +13,7 @@ this is a smaller module with only what the calibration needs.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 
@@ -62,10 +63,9 @@ class PinholeCamera:
         return u, v, in_front
 
     def ray_directions(self) -> np.ndarray:
-        """Unit ray direction of every pixel center, shape (height, width, 3)."""
-        u, v = self.pixel_grid()
-        directions = self.back_project(u, v, np.ones_like(u))
-        return directions / np.linalg.norm(directions, axis=-1, keepdims=True)
+        """Unit ray direction of every pixel center, shape (height, width, 3).
+        Cached per camera (the camera is immutable); callers must not write into it."""
+        return _cached_ray_directions(self)
 
     def ray_directions_at(self, u: np.ndarray, v: np.ndarray) -> np.ndarray:
         """Unit ray directions for arbitrary (possibly fractional) pixel coordinates."""
@@ -76,3 +76,12 @@ class PinholeCamera:
         """(horizontal, vertical) half field of view in degrees."""
         return (float(np.degrees(np.arctan((self.width / 2.0) / self.focal_x_px))),
                 float(np.degrees(np.arctan((self.height / 2.0) / self.focal_y_px))))
+
+
+@lru_cache(maxsize=8)
+def _cached_ray_directions(camera: PinholeCamera) -> np.ndarray:
+    u, v = camera.pixel_grid()
+    directions = camera.back_project(u, v, np.ones_like(u))
+    directions /= np.linalg.norm(directions, axis=-1, keepdims=True)
+    directions.setflags(write=False)
+    return directions

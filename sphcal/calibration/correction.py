@@ -270,7 +270,7 @@ def fit_correction(capture_set: CaptureSet, params: CorrectionFitParameters,
         samples = retarget_samples(samples, training_set, camera, transform, params.samples)
         if dt < params.extrinsic.convergence_translation_mm and drot < params.extrinsic.convergence_rotation_deg:
             break
-    fit = system.robust_solve(samples.target, penalty, huber, robust_weights)
+    fit = system.robust_solve(samples.target, penalty, huber, robust_weights, compute_edof=True)
     model.coefficients = fit.coefficients
     model.metadata["effective_degrees_of_freedom"] = fit.effective_degrees_of_freedom
     model.metadata["retarget_misses_last_round"] = samples.retarget_misses

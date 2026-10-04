@@ -330,3 +330,19 @@ transform is re-solved from the map's rigid component rather than from refitted
 sphere centers, which gives the alternation a definite fixed point; the
 hold-out split is stratified by target kind; sphere fits are trimmed and the
 transform solve gates poses by center residual.
+
+## 10. Run time (2026-10-04, 4-core container, 40 poses x 3 frames at 640 x 480)
+
+The first integration took 577 s. Three changes brought it to about 45 s with
+identical results: the design matrix is built once and the transform changes
+only the targets, so cross-validation, the robust iteration and every
+alternation round reuse Gram matrices (calibration/fast_solve.py); the exact
+effective degrees of freedom are computed once at the end; per-pose feature
+extraction runs in a process pool and the read-probability table is sampled
+at twice the correction stride. Cost scales linearly with the pose count in
+the per-pose parts (about 0.3 s per pose on one core) and not at all with it
+in the factorizations (fixed coefficient count), so a few hundred stage-1
+poses take a few minutes on a 4-core machine. No GPU is involved in the fit;
+the target GPU named in the pose-determination specification (GTX 1660 Ti
+class, Turing, compute capability 7.5, 6 GB, single precision) is relevant to
+the runtime evaluator, whose per-pixel work is trivially parallel.

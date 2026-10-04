@@ -96,7 +96,7 @@ def fit_parameters() -> CorrectionFitParameters:
     samples = SampleParameters(coverage=CoverageParameters(incidence_cutoff_deg=55.0, silhouette_margin_px=3.0,
                                                            board_edge_margin_mm=8.0),
                                slope=SlopeParameters(window_px=7), effective_block_px=TEST_BLOCK_PX,
-                               pixel_stride=TEST_BLOCK_PX)
+                               pixel_stride=TEST_BLOCK_PX, noread_pixel_stride=TEST_BLOCK_PX)
     return CorrectionFitParameters(samples=samples, extrinsic=ExtrinsicParameters(max_alternation_rounds=6),
                                    model=small_model_configuration(), robust=RobustParameters(max_iterations=3),
                                    smoothing=SmoothingSelection(method="pose_cv", folds=2,

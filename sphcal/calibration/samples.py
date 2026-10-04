@@ -16,6 +16,8 @@ Two kinds of tables are produced:
 """
 from __future__ import annotations
 
+import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -50,6 +52,11 @@ class SampleParameters:
     equal to the effective block, one sample per block carries the block's
     information and the design matrix is stride^2 times smaller; the
     correction is still evaluated at every native pixel (D-4)."""
+    noread_pixel_stride: int = 8
+    """Stride for the read-probability samples, which vary slowly across the
+    image and need far fewer rows than the correction samples."""
+    workers: int = 0
+    """Processes used for the per-pose feature extraction; 0 means all cores."""
     min_temporal_valid_fraction: float = 0.8
     """A pixel must have read in at least this fraction of a pose's frames to be a sample."""
     variance_floor_mm2: float = 1.0e-4
@@ -185,65 +192,74 @@ def sample_weight_factor(params: SampleParameters) -> float:
     return min(1.0, block_independence_weight(params.effective_block_px) * params.pixel_stride ** 2)
 
 
+def _pose_correction_rows(args) -> dict:
+    """Per-pose worker for build_correction_samples (module-level so that it can be pickled)."""
+    capture_set, pose_number, pose_id, sensor_to_positioner, params = args
+    block_weight = sample_weight_factor(params)
+    stack = capture_set.load_stack(pose_id)
+    record = stack.records[0]
+    camera = stack.camera
+    depth_stack = stack.xyz[..., 2].astype(np.float64)
+    stats = temporal_statistics(depth_stack, stack.valid, params.min_temporal_valid_fraction)
+    mean_depth = stats.mean_depth
+    valid = np.isfinite(mean_depth)
+    coverage = predict_coverage_for(record, camera, sensor_to_positioner, params.coverage)
+    measured_range = range_from_depth(np.where(valid, mean_depth, np.nan), camera)
+    slope_u, slope_v = image_slopes(mean_depth, valid, camera, params.slope)
+    residual = coverage.range_mm - measured_range
+    usable = coverage.usable & valid & np.isfinite(slope_u) & np.isfinite(slope_v) & np.isfinite(residual)
+    usable &= np.abs(residual) <= params.max_abs_residual_mm
+    usable &= (np.abs(slope_u) <= params.max_abs_slope) & (np.abs(slope_v) <= params.max_abs_slope)
+    usable &= stride_mask(usable.shape, params.pixel_stride)
+    n_frames = depth_stack.shape[0]
+    if n_frames > 1:
+        per_pixel = measured_range_variance(stats.variance, mean_depth, measured_range)
+        # The variance of the temporal MEAN is the per-frame variance over the frame count.
+        per_pixel = per_pixel / n_frames
+        variance = pooled_variance(per_pixel, coverage.cos_incidence, usable, params)
+        variance = np.where(np.isfinite(variance), variance, params.single_frame_variance_mm2)
+    else:
+        per_pixel = np.full(mean_depth.shape, params.single_frame_variance_mm2)
+        variance = per_pixel
+    variance = np.maximum(variance, params.variance_floor_mm2)
+    u_grid, v_grid = camera.pixel_grid()
+    rays = camera.ray_directions()
+    sel = np.nonzero(usable)
+    n = sel[0].size
+    return {
+        "inputs": np.column_stack([u_grid[sel], v_grid[sel], measured_range[sel], slope_u[sel], slope_v[sel],
+                                   np.full(n, coverage.curvature_per_mm)]),
+        "target": residual[sel], "weight": block_weight / variance[sel],
+        "pose": np.full(n, pose_number, dtype=np.int64),
+        "pixel": (sel[0] * camera.width + sel[1]).astype(np.int64),
+        "ray": rays[sel], "point": rays[sel] * measured_range[sel][:, None],
+        "cos": coverage.cos_incidence[sel], "var": per_pixel[sel],
+        "pose_id": pose_id, "kind": record.target_kind, "frames": n_frames,
+    }
+
+
+def _map_over_poses(function, capture_set: CaptureSet, sensor_to_positioner: RigidTransform,
+                    params: SampleParameters) -> list[dict]:
+    """Run a per-pose worker over all poses, in processes when more than one is allowed."""
+    tasks = [(capture_set, number, pose_id, sensor_to_positioner, params)
+             for number, pose_id in enumerate(capture_set.pose_ids())]
+    workers = params.workers or (os.cpu_count() or 1)
+    if workers <= 1 or len(tasks) <= 1:
+        return [function(task) for task in tasks]
+    with ProcessPoolExecutor(max_workers=min(workers, len(tasks))) as pool:
+        return list(pool.map(function, tasks))
+
+
 def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTransform,
                              params: SampleParameters) -> SampleTable:
     """Assemble the correction-sample table over every pose of the capture set."""
-    block_weight = sample_weight_factor(params)
-    rows_inputs, rows_target, rows_weight, rows_pose, rows_pixel = [], [], [], [], []
-    rows_ray, rows_point, rows_cos, rows_var = [], [], [], []
-    pose_ids, pose_kinds, frames_per_pose = [], [], []
-    for pose_number, pose_id in enumerate(capture_set.pose_ids()):
-        stack = capture_set.load_stack(pose_id)
-        record = stack.records[0]
-        camera = stack.camera
-        depth_stack = stack.xyz[..., 2].astype(np.float64)
-        stats = temporal_statistics(depth_stack, stack.valid, params.min_temporal_valid_fraction)
-        mean_depth = stats.mean_depth
-        valid = np.isfinite(mean_depth)
-        coverage = predict_coverage_for(record, camera, sensor_to_positioner, params.coverage)
-        measured_range = range_from_depth(np.where(valid, mean_depth, np.nan), camera)
-        slope_u, slope_v = image_slopes(mean_depth, valid, camera, params.slope)
-        residual = coverage.range_mm - measured_range
-        usable = coverage.usable & valid & np.isfinite(slope_u) & np.isfinite(slope_v) & np.isfinite(residual)
-        usable &= np.abs(residual) <= params.max_abs_residual_mm
-        usable &= (np.abs(slope_u) <= params.max_abs_slope) & (np.abs(slope_v) <= params.max_abs_slope)
-        usable &= stride_mask(usable.shape, params.pixel_stride)
-        n_frames = depth_stack.shape[0]
-        if n_frames > 1:
-            per_pixel = measured_range_variance(stats.variance, mean_depth, measured_range)
-            # The variance of the temporal MEAN is the per-frame variance over the frame count.
-            per_pixel = per_pixel / n_frames
-            variance = pooled_variance(per_pixel, coverage.cos_incidence, usable, params)
-            variance = np.where(np.isfinite(variance), variance, params.single_frame_variance_mm2)
-        else:
-            per_pixel = np.full(mean_depth.shape, params.single_frame_variance_mm2)
-            variance = per_pixel
-        variance = np.maximum(variance, params.variance_floor_mm2)
-        u_grid, v_grid = camera.pixel_grid()
-        rays = camera.ray_directions()
-        curvature = coverage.curvature_per_mm
-        sel = np.nonzero(usable)
-        n = sel[0].size
-        inputs = np.column_stack([u_grid[sel], v_grid[sel], measured_range[sel], slope_u[sel], slope_v[sel],
-                                  np.full(n, curvature)])
-        rows_inputs.append(inputs)
-        rows_target.append(residual[sel])
-        rows_weight.append(block_weight / variance[sel])
-        rows_pose.append(np.full(n, pose_number, dtype=np.int64))
-        rows_pixel.append((sel[0] * camera.width + sel[1]).astype(np.int64))
-        rows_ray.append(rays[sel])
-        rows_point.append(rays[sel] * measured_range[sel][:, None])
-        rows_cos.append(coverage.cos_incidence[sel])
-        rows_var.append(per_pixel[sel])
-        pose_ids.append(pose_id)
-        pose_kinds.append(record.target_kind)
-        frames_per_pose.append(n_frames)
-    if not rows_inputs:
+    results = _map_over_poses(_pose_correction_rows, capture_set, sensor_to_positioner, params)
+    if not results or sum(r["inputs"].shape[0] for r in results) == 0:
         raise ValueError("the capture set produced no samples")
-    return SampleTable(np.concatenate(rows_inputs), np.concatenate(rows_target), np.concatenate(rows_weight),
-                       np.concatenate(rows_pose), np.concatenate(rows_pixel), np.concatenate(rows_ray),
-                       np.concatenate(rows_point), np.concatenate(rows_cos), pose_ids, pose_kinds, frames_per_pose,
-                       np.concatenate(rows_var))
+    cat = lambda key: np.concatenate([r[key] for r in results])
+    return SampleTable(cat("inputs"), cat("target"), cat("weight"), cat("pose"), cat("pixel"), cat("ray"),
+                       cat("point"), cat("cos"), [r["pose_id"] for r in results], [r["kind"] for r in results],
+                       [r["frames"] for r in results], cat("var"))
 
 
 def retarget_samples(samples: SampleTable, capture_set: CaptureSet, camera: PinholeCamera,
@@ -277,6 +293,30 @@ def retarget_samples(samples: SampleTable, capture_set: CaptureSet, camera: Pinh
                        samples.pose_kinds, samples.frames_per_pose, samples.range_variance, misses)
 
 
+def _pose_noread_rows(args) -> dict:
+    """Per-pose worker for build_noread_samples."""
+    capture_set, pose_number, pose_id, sensor_to_positioner, params = args
+    block_weight = sample_weight_factor(params)
+    stack = capture_set.load_stack(pose_id)
+    record = stack.records[0]
+    camera = stack.camera
+    n_frames = stack.valid.shape[0]
+    read_fraction = stack.valid.sum(axis=0) / float(n_frames)
+    coverage = predict_coverage_for(record, camera, sensor_to_positioner, params.coverage)
+    covered = coverage.covered & np.isfinite(coverage.range_mm)
+    u_grid, v_grid = camera.pixel_grid()
+    rays = camera.ray_directions()
+    predicted_depth = np.where(covered, coverage.range_mm * rays[..., 2], np.nan)
+    slope_u, slope_v = image_slopes(predicted_depth, covered, camera, params.slope)
+    usable = covered & np.isfinite(slope_u) & np.isfinite(slope_v) & stride_mask(covered.shape, params.noread_pixel_stride)
+    sel = np.nonzero(usable)
+    n = sel[0].size
+    return {"inputs": np.column_stack([u_grid[sel], v_grid[sel], coverage.range_mm[sel], slope_u[sel], slope_v[sel],
+                                       np.full(n, coverage.curvature_per_mm)]),
+            "fraction": read_fraction[sel], "trials": np.full(n, n_frames * block_weight),
+            "pose": np.full(n, pose_number, dtype=np.int64), "cos": coverage.cos_incidence[sel]}
+
+
 def build_noread_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTransform,
                          params: SampleParameters) -> NoReadTable:
     """
@@ -285,28 +325,6 @@ def build_noread_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTra
     slopes of the PREDICTED depth image computed with the same window estimator
     as the measured slopes, so that the two maps index slope the same way.
     """
-    block_weight = sample_weight_factor(params)
-    rows_inputs, rows_fraction, rows_trials, rows_pose, rows_cos = [], [], [], [], []
-    for pose_number, pose_id in enumerate(capture_set.pose_ids()):
-        stack = capture_set.load_stack(pose_id)
-        record = stack.records[0]
-        camera = stack.camera
-        n_frames = stack.valid.shape[0]
-        read_fraction = stack.valid.sum(axis=0) / float(n_frames)
-        coverage = predict_coverage_for(record, camera, sensor_to_positioner, params.coverage)
-        covered = coverage.covered & np.isfinite(coverage.range_mm)
-        u_grid, v_grid = camera.pixel_grid()
-        rays = camera.ray_directions()
-        predicted_depth = np.where(covered, coverage.range_mm * rays[..., 2], np.nan)
-        slope_u, slope_v = image_slopes(predicted_depth, covered, camera, params.slope)
-        usable = covered & np.isfinite(slope_u) & np.isfinite(slope_v) & stride_mask(covered.shape, params.pixel_stride)
-        sel = np.nonzero(usable)
-        n = sel[0].size
-        rows_inputs.append(np.column_stack([u_grid[sel], v_grid[sel], coverage.range_mm[sel], slope_u[sel],
-                                            slope_v[sel], np.full(n, coverage.curvature_per_mm)]))
-        rows_fraction.append(read_fraction[sel])
-        rows_trials.append(np.full(n, n_frames * block_weight))
-        rows_pose.append(np.full(n, pose_number, dtype=np.int64))
-        rows_cos.append(coverage.cos_incidence[sel])
-    return NoReadTable(np.concatenate(rows_inputs), np.concatenate(rows_fraction), np.concatenate(rows_trials),
-                       np.concatenate(rows_pose), np.concatenate(rows_cos))
+    results = _map_over_poses(_pose_noread_rows, capture_set, sensor_to_positioner, params)
+    cat = lambda key: np.concatenate([r[key] for r in results])
+    return NoReadTable(cat("inputs"), cat("fraction"), cat("trials"), cat("pose"), cat("cos"))
