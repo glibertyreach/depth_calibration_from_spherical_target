@@ -1,0 +1,24 @@
+Stage-1 pose plan
+Sensor-to-base transform: matrix from /tmp/claude-0/-home-user-depth-calibration-from-spherical-target/6fdf0d91-fa81-54f4-b7f8-6ea57d1b7db0/scratchpad/identity.json
+Camera: 640 x 480 px, half field 24.9 x 19.2 deg
+
+Sphere poses per depth plane:
+  radius_mm  depth_mm  count  held out
+         38       300     12         6
+         38       425     20         4
+         38       550     35         2
+         76       500      9         1
+         76       700     12         2
+         76       900     24         8
+         76      1100     35         8
+
+Board poses per depth plane:
+   depth_mm  planned   kept  skipped  held out
+        350       10      9        1         2
+        550       10     10        0         3
+        800       10     10        0         1
+       1050       10     10        0         0
+  1 board combinations were skipped because a corner would leave the field of view (margin 10 px); use fewer lateral positions, a smaller tilt, or a larger depth to keep them.
+
+6 of 147 sphere poses would be partly outside the image (approximate, margin 10 px); lower --fov-fill if the sphere must be fully visible.
+Total: 186 poses (147 sphere, 39 board), 37 tagged held out (seed 0).

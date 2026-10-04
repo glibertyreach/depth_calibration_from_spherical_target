@@ -12,7 +12,7 @@ calibration software uses that table to work out the sensor's errors. If the
 table is wrong, the calibration is wrong, so most of this procedure is about
 getting the table right.
 
-Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures.
+Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures; figure 2 (section 6) shows an example pose plan.
 
 ![fixtures](figures/fig_fixtures.png)
 
@@ -26,9 +26,9 @@ Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures.
 | Robot | Six-axis industrial robot, absolute positioning accuracy 0.1 mm or better over the working volume, with a 50 mm or larger ISO flange | A robot that has been calibrated by its maker ("absolute accuracy" option) is needed; repeatability alone is not enough |
 | Sphere A | Precision sphere, 3 inch (76.2 mm) diameter, matte, with a threaded hole or a bonded stem | Ceramic (zirconia or alumina) with a matte finish, or a steel sphere bead-blasted and matte-painted; certificate stating the diameter to 0.01 mm |
 | Sphere B | Precision sphere, 6 inch (152.4 mm) diameter, matte, same construction | Same supplier if possible so the finish matches |
-| Stems | One stem per sphere, steel, diameter about R/4 (10 mm for sphere A, 20 mm for sphere B), length at least 2R + 50 mm from the adapter face to the sphere surface (130 mm for A, 200 mm for B), matte black | The stem must be stiff: a sagging stem moves the sphere center |
+| Stems | One stem per sphere, steel, diameter about R/4 (10 mm for sphere A, 20 mm for sphere B), length at least 2R + 50 mm from the adapter face to the sphere surface (130 mm for A, 205 mm for B), matte black | The stem must be stiff: a sagging stem moves the sphere center |
 | Adapter plate | Bolts to the robot flange with the flange's dowel pins, carries a threaded hole for the stem on the flange axis | Use the dowel pins every time, so the adapter goes back in the same place |
-| Board | Flat plate 240 mm x 180 mm, at least 15 mm thick, front face matte and light gray, flat to 0.05 mm | Ground aluminum tooling plate, bead-blasted and matte-painted; or float glass with matte paint; ask the supplier for a flatness report |
+| Board | Flat plate 200 mm x 150 mm, at least 15 mm thick, front face matte and light gray, flat to 0.05 mm | Ground aluminum tooling plate, bead-blasted and matte-painted; or float glass with matte paint; ask the supplier for a flatness report |
 | Board adapter | Plate that bolts to the flange with the dowel pins and holds the board with its front face perpendicular to the flange axis and its center on the flange axis | Three-point mounting (two dowels and a clamp) so the board goes back in the same place |
 | Three-ball nest | Three hardened balls, about 24 mm diameter, pressed into a base, bolted to the table within reach of the robot | Used once per sphere to find the tool center point (section 3) |
 | Dial indicator with magnetic base | 0.01 mm resolution | Board runout check |
@@ -66,7 +66,7 @@ The board's "tool frame" is a coordinate frame at the center of the board's fron
 1. Mount the board adapter and the board on the flange with the dowel pins.
 2. Runout check (figure 1c): fix the dial indicator to the table with its tip on the board's front face about 20 mm from an edge. Slowly rotate the flange about its own axis (robot joint 6) through 360 degrees. The reading must stay within 0.05 mm. If it does not, the board face is not perpendicular to the flange axis: shim the adapter and repeat.
 3. Measure the distance from the flange face to the board's front face with a depth gauge or calipers at four places around the board; they should agree within 0.05 mm. Record the average as D.
-4. Measure the board's width and height with calipers and record them. The half-sizes go in the manifest (120 and 90 mm for the recommended board).
+4. Measure the board's width and height with calipers and record them. The half-sizes go in the manifest (100 and 75 mm for the recommended board).
 5. Define the tool frame in the robot: position (0, 0, D) from the flange, orientation: z along the flange axis pointing out of the board, x along the board's long edge. How to set x: with the robot's "tool orientation by points" function, teach a point at the center of the long edge, or enter the rotation about z that aligns x with the long edge, after measuring with a square against the adapter. An error of a few degrees in x is harmless (the board is symmetric); an error in z is not.
 6. Save as `TOOL_BOARD` and write the numbers in the session notes.
 
@@ -81,8 +81,12 @@ The software works out the exact position of the sensor from the captures. It on
 
 ```
 python3 -m sphcal.cli.check_captures --manifest boot_manifest.csv --out boot_check.json
-python3 -m sphcal.cli.plan_poses --sensor-in-base boot.json --camera boot01_Index00.mc --out plan/
+python3 -m sphcal.cli.plan_poses --sensor-in-base boot.json --camera boot01_Index00.mc \
+    --near-radius-mm 38.1 --far-radius-mm 76.2 --fov-fill 0.7 \
+    --board-half-size-mm 100 75 --board-lateral-fill 0.2 --out plan/
 ```
+
+(Use the certified radii of your spheres in place of 38.1 and 76.2, and your board's half-sizes in place of 100 75.)
 
 `boot.json` lists, for each bootstrap capture, the robot position you wrote down and the sphere center the check tool found in the sensor's frame:
 
@@ -99,14 +103,18 @@ The plan tool prints the residual of each pair. They should be a few millimeters
 
 ## 6. The pose plan
 
-The plan tool writes `plan/poses.csv`, `plan/plan_summary.txt` and a picture `plan/plan.png` of where the targets will be. The default plan is:
+The plan tool writes `plan/poses.csv`, `plan/plan_summary.txt` and a picture `plan/plan.png` of where the targets will be (figure 2 shows the picture for the settings above and the sensor's 49.9 x 38.5 degree field). The plan with the settings above is:
 
-- Sphere A (76 mm diameter) on three depth planes between 300 and 550 mm from the sensor, centers on a grid with 60 mm spacing covering 80 percent of the field of view at each depth.
-- Sphere B (152 mm diameter) on four depth planes between 500 and 1,100 mm, grid spacing 120 mm. Both spheres are used between 500 and 550 mm.
-- The board at four depths (350, 550, 800, 1,050 mm), facing the sensor and tilted 20 and 40 degrees about two directions, at two lateral positions per depth. Tilted boards that would leave the field of view are dropped automatically.
+- Sphere A (76.2 mm diameter) on three depth planes at 300, 425 and 550 mm from the sensor, centers on a grid with a spacing of 1.5 radii (57 mm) covering 70 percent of the field of view at each depth: 90 poses.
+- Sphere B (152.4 mm diameter) on four depth planes at 500, 700, 900 and 1,100 mm, grid spacing 114 mm: 57 poses. Both spheres are used around 500 to 550 mm.
+- The board at four depths (350, 550, 800, 1,050 mm), facing the sensor and tilted 0, 20 and 40 degrees about two directions, at two lateral positions per depth: 39 poses. Tilted boards that would leave the field of view are dropped automatically (one at 350 mm with these settings).
 - About 20 percent of poses are marked `holdout` in the table; capture them like all the others, the software keeps them for checking.
 
-The total is about 250 poses. At about 8 seconds per pose that is about 35 minutes of robot time per sphere change, so plan on about two hours including fixture changes.
+The total is 186 poses. A handful of the outermost sphere poses (6 with these settings) may have their silhouette touching the image border; the check in section 8 flags them, and they are simply left out of the fit. At about 8 seconds per pose the robot time is about 25 minutes, so plan on about two hours including fixture changes and the checks.
+
+![plan](figures/fig_plan_example.png)
+
+Figure 2. The planned sphere centers and board centers for the settings above, in the sensor's frame: side view (left) and front view (right), with the field of view drawn.
 
 Every row of `poses.csv` gives: `pose_id`, `kind` (sphere or board), the target size, the position of the TCP in the base frame (`base_x_mm`, `base_y_mm`, `base_z_mm`), and the tool orientation three ways (rotation matrix `r00..r22`, quaternion `quat_w..quat_z`, rotation vector `rotvec_x_deg..`); use whichever your robot program accepts. For spheres the orientation points the stem away from the sensor so that the sphere hides it; for boards it is the board frame orientation, tilt included. Hand the file to whoever writes the robot program, or import it directly if the controller can read CSV.
 
@@ -142,8 +150,8 @@ pose_id, kind, radius_mm, half_width_mm, half_height_mm, x_mm, y_mm, z_mm, rotat
 Example lines:
 
 ```
-s038_z0430_017,sphere,38.10,,,812.40,-33.21,455.02,none,,,,
-b_z0550_t20_a090_1,board,,120.0,90.0,850.11,-12.70,470.55,euler_zyx_deg,-91.3,19.8,0.4,
+s038_z0425_017,sphere,38.10,,,812.40,-33.21,455.02,none,,,,
+b_z0550_t20_a090_1,board,,100.0,75.0,850.11,-12.70,470.55,euler_zyx_deg,-91.3,19.8,0.4,
 ```
 
 After the session, the manifest is built from the pose log and the capture folder:
@@ -152,7 +160,7 @@ After the session, the manifest is built from the pose log and the capture folde
 python3 -m sphcal.cli.make_manifest --pose-log pose_log.csv --captures captures/ --format csv --out captures/manifest.csv
 ```
 
-The tool matches every file to its pose id, converts the orientation to the standard matrix form, and complains, by name, about any pose without files, any file without a pose, and any missing size. Fix what it names and run it again. The manifest it writes is the file the calibration reads; keep the pose log too.
+The tool matches every file to its pose id, converts the orientation to the standard matrix form, and complains, by name, about any pose without files, any file without a pose, and any missing size. A pose without files or a file without a pose is a warning and the pose is left out; add `--strict` to make them errors. Row problems (a sphere without a radius, a board without a size or with rotation type `none`) stop the tool and nothing is written. Fix what it names and run it again. A `poses.csv` from the plan tool is also accepted directly as the pose log if your robot program cannot write one; then the commanded poses stand in for the reported ones, which is acceptable only for a robot with absolute accuracy better than 0.1 mm. The manifest it writes is the file the calibration reads; keep the pose log too.
 
 What the manifest contains, for reference: one line per frame, with the file name, the pose id, the frame number, the target kind and size, and the pose as the twelve numbers of the top three rows of the 4 x 4 matrix (`m00..m23`), tool frame to base frame. A JSON form of the same content exists for software that prefers it.
 
@@ -171,7 +179,7 @@ It prints one line per pose and a verdict. Things it flags, and what they mean:
 - Sphere center residual above 2 mm against the commanded position: either the robot position was copied wrongly for that pose, or, if it affects every pose of one sphere, that sphere's TCP is wrong; or, if it grows steadily across the volume, the robot's base frame or its absolute accuracy is off.
 - Board normal more than 2 degrees from the commanded direction: the board tool frame's orientation is wrong (section 4, step 5) or the rotation type in the pose log is misnamed.
 
-Re-capture flagged poses after fixing the cause; do not delete the lines from the log, add corrected lines with a new pose id (for example `s038_z0430_017r`).
+Re-capture flagged poses after fixing the cause; do not delete the lines from the log, add corrected lines with a new pose id (for example `s038_z0425_017r`). The check tool's exit code is 0 when nothing is flagged, 1 when something is, and 2 when it cannot read the manifest.
 
 ## 9. Optional independent check with a two-sphere bar
 
