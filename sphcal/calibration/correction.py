@@ -1,0 +1,197 @@
+"""
+Fitting the correction map: the orchestration of steps S1 to S4 of the
+analysis document.
+
+    S1  initial sensor-to-positioner transform from uncorrected sphere fits
+    S2  per-sample residual targets against the known targets under that transform
+    S3  penalized, robust, weighted least-squares fit of the sum-of-terms B-spline
+    S4  correct the points, refit the sphere centers, re-solve the transform,
+        rebuild the targets, refit; repeat until the transform settles
+
+Poses are split into a training set and a held-out set BY POSE (never by
+pixel), so the held-out error measures generalization to unseen placements.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from sphcal.calibration.extrinsic import ExtrinsicParameters, fit_sphere_center, rigid_component_of_displacements, \
+    solve_sensor_to_positioner
+from sphcal.calibration.model_config import ModelConfiguration, build_model, default_configuration
+from sphcal.calibration.samples import SampleParameters, SampleTable, build_correction_samples
+from sphcal.geometry.transforms import RigidTransform
+from sphcal.io.capture_set import CaptureSet
+from sphcal.spline.fit import RobustParameters, SmoothingGrid, fit_robust, select_smoothing_by_gcv
+from sphcal.spline.model import SumOfTermsSpline
+
+
+@dataclass(frozen=True)
+class HoldoutParameters:
+    fraction: float = 0.2
+    """Fraction of poses held out, chosen at random with the seed below."""
+    seed: int = 12345
+    min_training_sphere_poses: int = 3
+    """The split must leave at least this many sphere poses for the transform solve."""
+
+
+@dataclass(frozen=True)
+class CorrectionFitParameters:
+    samples: SampleParameters = field(default_factory=SampleParameters)
+    extrinsic: ExtrinsicParameters = field(default_factory=ExtrinsicParameters)
+    model: ModelConfiguration = field(default_factory=default_configuration)
+    robust: RobustParameters = field(default_factory=RobustParameters)
+    smoothing_grid: SmoothingGrid | None = field(default_factory=SmoothingGrid)
+    """Grid for the GCV search over smoothing parameters; None keeps the initial values."""
+    holdout: HoldoutParameters = field(default_factory=HoldoutParameters)
+    select_smoothing_every_round: bool = False
+    """GCV selection is costly; by default it runs in the first round only and the
+    selected values are kept for the later rounds of the alternation."""
+
+
+@dataclass
+class AlternationRound:
+    round_index: int
+    transform: RigidTransform
+    translation_change_mm: float
+    rotation_change_deg: float
+    training_residual_rms_mm: float
+    rigid_translation_mm: np.ndarray
+    rigid_rotation_deg: np.ndarray
+
+
+@dataclass
+class CorrectionFitResult:
+    model: SumOfTermsSpline
+    sensor_to_positioner: RigidTransform
+    training_poses: list[str]
+    holdout_poses: list[str]
+    rounds: list[AlternationRound]
+    training_samples: SampleTable
+    holdout_samples: SampleTable | None
+    holdout_residual_before_rms_mm: float | None
+    holdout_residual_after_rms_mm: float | None
+
+
+def subset_capture_set(capture_set: CaptureSet, pose_ids: list[str]) -> CaptureSet:
+    """A CaptureSet holding only the records of the given poses, in the given order."""
+    wanted = set(pose_ids)
+    return CaptureSet([record for record in capture_set.records if record.pose_id in wanted])
+
+
+def split_poses(capture_set: CaptureSet, params: HoldoutParameters) -> tuple[list[str], list[str]]:
+    """Random split of pose ids into training and held-out lists."""
+    rng = np.random.default_rng(params.seed)
+    pose_ids = capture_set.pose_ids()
+    kinds = {pid: capture_set.records_for(pid)[0].target_kind for pid in pose_ids}
+    order = rng.permutation(len(pose_ids))
+    n_holdout = int(round(params.fraction * len(pose_ids)))
+    holdout = [pose_ids[i] for i in order[:n_holdout]]
+    training = [pose_ids[i] for i in order[n_holdout:]]
+    n_training_spheres = sum(1 for pid in training if kinds[pid] == "sphere")
+    if n_training_spheres < params.min_training_sphere_poses:
+        raise ValueError(f"only {n_training_spheres} sphere poses would remain for training; "
+                         f"need {params.min_training_sphere_poses}")
+    return training, holdout
+
+
+def initial_transform(capture_set: CaptureSet, pose_ids: list[str], params: CorrectionFitParameters) -> RigidTransform:
+    """S1: transform from the centers of spheres fitted to the uncorrected points."""
+    centers_sensor, centers_positioner = [], []
+    for pid in pose_ids:
+        records = capture_set.records_for(pid)
+        record = records[0]
+        if record.target_kind != "sphere":
+            continue
+        stack = capture_set.load_stack(pid)
+        mean_xyz = _temporal_mean_points(stack.xyz, stack.valid, params.samples.min_temporal_valid_fraction)
+        points = mean_xyz[np.isfinite(mean_xyz[..., 2])]
+        center = fit_sphere_center(points, record.sphere_radius_mm, params.extrinsic.sphere_fit)
+        centers_sensor.append(center)
+        centers_positioner.append(record.target_pose_positioner.translation)
+    if len(centers_sensor) < params.extrinsic.min_sphere_poses:
+        raise ValueError("not enough sphere poses to solve the sensor-to-positioner transform")
+    return solve_sensor_to_positioner(np.array(centers_sensor), np.array(centers_positioner))
+
+
+def _temporal_mean_points(xyz_stack: np.ndarray, valid_stack: np.ndarray, min_valid_fraction: float) -> np.ndarray:
+    """Per-pixel mean point over the frames in which the pixel was valid; NaN elsewhere."""
+    count = valid_stack.sum(axis=0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = (xyz_stack * valid_stack[..., None]).sum(axis=0) / count[..., None]
+    enough = count >= min_valid_fraction * valid_stack.shape[0]
+    return np.where(enough[..., None], mean, np.nan)
+
+
+def _fit_model_on(samples: SampleTable, model: SumOfTermsSpline, params: CorrectionFitParameters,
+                  select_smoothing: bool) -> SumOfTermsSpline:
+    """S3: the penalized robust fit, with an optional GCV search over smoothing."""
+    if select_smoothing and params.smoothing_grid is not None:
+        model = select_smoothing_by_gcv(model, samples.inputs, samples.target, samples.weight, params.smoothing_grid)
+    design = model.design(samples.inputs)
+    result = fit_robust(design, samples.target, samples.weight, model.penalty(), params.robust)
+    model.coefficients = result.coefficients
+    return model
+
+
+def _refit_transform(capture_set: CaptureSet, samples: SampleTable, model: SumOfTermsSpline,
+                     params: CorrectionFitParameters) -> RigidTransform:
+    """S4: correct the sample points with the current map, refit sphere centers, re-solve the transform."""
+    delta = model.evaluate(samples.inputs)
+    corrected_points = samples.ray_direction * (samples.inputs[:, 2] + delta)[:, None]
+    centers_sensor, centers_positioner = [], []
+    for pose_number, pose_id in enumerate(samples.pose_ids):
+        if samples.pose_kinds[pose_number] != "sphere":
+            continue
+        mask = samples.pose_index == pose_number
+        if mask.sum() < 4:
+            continue
+        record = capture_set.records_for(pose_id)[0]
+        center = fit_sphere_center(corrected_points[mask], record.sphere_radius_mm, params.extrinsic.sphere_fit,
+                                   weights=samples.weight[mask])
+        centers_sensor.append(center)
+        centers_positioner.append(record.target_pose_positioner.translation)
+    return solve_sensor_to_positioner(np.array(centers_sensor), np.array(centers_positioner))
+
+
+def fit_correction(capture_set: CaptureSet, params: CorrectionFitParameters,
+                   sensor_to_positioner: RigidTransform | None = None) -> CorrectionFitResult:
+    """Run S1 to S4 and evaluate on the held-out poses."""
+    training_ids, holdout_ids = split_poses(capture_set, params.holdout)
+    training_set = subset_capture_set(capture_set, training_ids)
+    transform = sensor_to_positioner or initial_transform(training_set, training_ids, params)
+    first_stack = training_set.load_stack(training_ids[0])
+    width, height = first_stack.camera.width, first_stack.camera.height
+    rounds: list[AlternationRound] = []
+    model: SumOfTermsSpline | None = None
+    samples = build_correction_samples(training_set, transform, params.samples)
+    for round_index in range(params.extrinsic.max_alternation_rounds):
+        if model is None:
+            model = build_model(params.model, samples.inputs, width, height,
+                                metadata={"gauge": "sensor frame; transform re-solved from corrected sphere centers"})
+        select = round_index == 0 or params.select_smoothing_every_round
+        model = _fit_model_on(samples, model, params, select)
+        residual_after = samples.target - model.evaluate(samples.inputs)
+        rms = float(np.sqrt(np.average(residual_after ** 2, weights=samples.weight)))
+        delta = model.evaluate(samples.inputs)
+        t_rigid, omega_rigid = rigid_component_of_displacements(samples.measured_point,
+                                                                samples.ray_direction * delta[:, None], samples.weight)
+        new_transform = _refit_transform(training_set, samples, model, params)
+        dt, drot = new_transform.difference_from(transform)
+        rounds.append(AlternationRound(round_index, new_transform, dt, drot, rms, t_rigid, np.degrees(omega_rigid)))
+        transform = new_transform
+        converged = dt < params.extrinsic.convergence_translation_mm and drot < params.extrinsic.convergence_rotation_deg
+        samples = build_correction_samples(training_set, transform, params.samples)
+        if converged:
+            model = _fit_model_on(samples, model, params, select_smoothing=False)
+            break
+    holdout_samples = None
+    before = after = None
+    if holdout_ids:
+        holdout_samples = build_correction_samples(subset_capture_set(capture_set, holdout_ids), transform, params.samples)
+        residual_before = holdout_samples.target
+        residual_after = holdout_samples.target - model.evaluate(holdout_samples.inputs)
+        before = float(np.sqrt(np.average(residual_before ** 2, weights=holdout_samples.weight)))
+        after = float(np.sqrt(np.average(residual_after ** 2, weights=holdout_samples.weight)))
+    return CorrectionFitResult(model, transform, training_ids, holdout_ids, rounds, samples, holdout_samples, before, after)
