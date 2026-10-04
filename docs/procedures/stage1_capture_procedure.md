@@ -12,7 +12,7 @@ calibration software uses that table to work out the sensor's errors. If the
 table is wrong, the calibration is wrong, so most of this procedure is about
 getting the table right.
 
-Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures; figure 2 (section 6) shows an example pose plan.
+Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures; figure 2 (section 6) shows an example pose plan; figure 3 (section 3a) shows the sphere mounting in section.
 
 ![fixtures](figures/fig_fixtures.png)
 
@@ -26,11 +26,11 @@ Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures; figure 2 (sectio
 | Robot | Six-axis industrial robot, absolute positioning accuracy 0.1 mm or better over the working volume, with a 50 mm or larger ISO flange | A robot that has been calibrated by its maker ("absolute accuracy" option) is needed; repeatability alone is not enough |
 | Sphere A | Precision sphere, 3 inch (76.2 mm) diameter, matte, with a threaded hole or a bonded stem | Ceramic (zirconia or alumina) with a matte finish, or a steel sphere bead-blasted and matte-painted; certificate stating the diameter to 0.01 mm |
 | Sphere B | Precision sphere, 6 inch (152.4 mm) diameter, matte, same construction | Same supplier if possible so the finish matches |
-| Stems | One stem per sphere, steel, diameter about R/4 (10 mm for sphere A, 20 mm for sphere B), length at least 2R + 50 mm from the adapter face to the sphere surface (130 mm for A, 205 mm for B), matte black | The stem must be stiff: a sagging stem moves the sphere center |
-| Adapter plate | Bolts to the robot flange with the flange's dowel pins, carries a threaded hole for the stem on the flange axis | Use the dowel pins every time, so the adapter goes back in the same place |
+| Stems | One stem per sphere, ground steel, 16 mm diameter for sphere A and 30 mm for sphere B, length at least 2R + 50 mm from the adapter face to the sphere surface (130 mm for A, 205 mm for B), turned shoulder at the adapter end, matte black | Section 3a gives the design; a slender stem sags and moves the sphere center |
+| Adapter plates | One per sphere; bolts to the robot flange on its dowel pin, central tapped hole (M12 for A, M20 for B) machined square to the mounting face | Section 3a; use the dowel every time, so the adapter goes back in the same place |
 | Board | Flat plate 200 mm x 150 mm, at least 15 mm thick, front face matte and light gray, flat to 0.05 mm | Ground aluminum tooling plate, bead-blasted and matte-painted; or float glass with matte paint; ask the supplier for a flatness report |
 | Board adapter | Plate that bolts to the flange with the dowel pins and holds the board with its front face perpendicular to the flange axis and its center on the flange axis | Three-point mounting (two dowels and a clamp) so the board goes back in the same place |
-| Three-ball nest | Three hardened balls, about 24 mm diameter, pressed into a base, bolted to the table within reach of the robot | Used once per sphere to find the tool center point (section 3) |
+| Three-ball nest | Three hardened balls, about 24 mm diameter, pressed into a base, bolted to the table within reach of the robot | Used once per sphere to find the tool center point (section 3b) |
 | Dial indicator with magnetic base | 0.01 mm resolution | Board runout check |
 | Capture computer | Runs the sensor's capture software, writes `.mc` files with the sensor's own name in the file name | Must have at least 10 GB free per 1,000 frames |
 
@@ -44,7 +44,29 @@ Optional: a certified two-sphere bar (two matte spheres on a rigid bar, center-t
 4. Confirm with the engineer what the robot base frame is (which frame the robot's position readout is in). Every pose in this procedure is recorded in that frame. Do not change the active base frame during the session.
 5. Record in a text file (`session_notes.txt`): date, sensor serial number, exposure and gain, robot model and controller software version, the active base frame name, the sphere and board certificates (diameter, flatness), room temperature, and anything unusual.
 
-## 3. Finding the tool center point of each sphere
+## 3. Mounting the spheres and finding their tool center points
+
+### 3a. Suggested mounting: flange, adapter, stem, sphere
+
+Figure 1a shows the arrangement and figure 3 the joint details. The goal is a
+stiff, repeatable chain from the robot flange to the sphere center; where the
+center ends up does not need to be known from drawings, because the tool
+center point routine (3b) measures it, but it must not move afterwards.
+
+![mounting](figures/fig_mounting_detail.png)
+
+Figure 3. Section through the sphere mounting: adapter plate on the flange's dowel and bolts, stem with a turned shoulder seated on the adapter face, and the sphere end either threaded into the sphere's insert (ceramic spheres) or bonded into a reamed blind hole (steel spheres).
+
+1. Adapter plate. One plate per sphere, steel or aluminum, 12 mm thick, drilled to the robot's flange pattern (for a 50 mm ISO 9409-1 flange: four M6 on a 50 mm circle and one 6 mm dowel) with a central tapped hole for the stem: M12 for sphere A, M20 for sphere B. Have the plate's mounting face, its outer face and the tapped hole machined in one lathe setup, located on the flange pilot diameter, so the hole is perpendicular to the mounting face within 0.02 mm over 100 mm. Always mount it on the dowel; the dowel is what makes a remount land in the same place.
+2. Stem. Ground steel rod (drill rod or silver steel): 16 mm diameter for sphere A, 30 mm for sphere B. These are thicker than the earlier rule of thumb on purpose: the sphere's weight at the end of a slender stem sags by about 0.07 mm on a 12 mm stem for sphere A and 0.1 mm on a 25 mm stem for sphere B, which would change with the robot's orientation; at 16 and 30 mm the sag is 0.02 to 0.05 mm. Length from the adapter face to the sphere surface at least 2R plus 50 mm (130 mm for A, 205 mm for B). At the adapter end turn a threaded spigot (M12 x 15 mm, M20 x 25 mm) behind a shoulder at least 1.5 times the stem diameter across; the shoulder face, machined square to the stem axis in the same setup as the thread, seats on the adapter and sets the stem perpendicular. Tighten to a moderate, recorded torque; a jam nut is optional. Make a witness mark across stem and adapter so a loosened joint is visible. Finish the stem matte black (bluing or matte paint).
+3. Sphere end, ceramic spheres (preferred). Precision ceramic spheres are sold with a threaded insert (typically M6 or M8) bonded in by the maker. Turn the stem tip to a matching threaded spigot with a small shoulder that seats on the flat around the insert; add a drop of medium-strength thread locker and tighten by hand plus a quarter turn. Do not clamp the sphere in a vise; hold the stem.
+4. Sphere end, steel spheres. Drill and ream a blind hole along any radius to about 0.6 R deep, sized for a light press fit on the stem tip (H7/p6), and bond with an anaerobic retaining compound (for example a high-strength bearing retainer). Do not weld or braze; the heat distorts the sphere. The hole does not have to be exactly radial, since the routine of 3b measures the center wherever it ends up.
+5. Weight. Sphere A in ceramic weighs about 0.9 kg, in steel 1.8 kg. Sphere B in steel weighs 14.5 kg and is not recommended; in alumina ceramic about 7 kg; a precision-turned aluminum sphere with a matte hard-anodized surface weighs about 5 kg and is the practical choice if a supplier can certify its radius to 0.01 mm. Check the robot's payload rating against the sphere, stem and adapter together.
+6. Finish. A matte, light, uniform surface on both spheres, the same finish on both. Polished steel is unusable (it returns one bright highlight from the sensor's projector and little else); if a steel sphere is used, have it bead-blasted and matte-painted, and re-measure its radius afterwards, since paint adds thickness.
+7. Handling. Keep each sphere in a padded case with its stem fitted. Never set a sphere down on its surface on a hard table. Wipe with isopropyl alcohol before a session.
+8. Repeatability. After any remount of the adapter or stem, re-run the nest check (3b, step 8) before capturing. The joint is good if the two readings agree within 0.1 mm.
+
+### 3b. Finding the tool center point of each sphere
 
 The calibration needs to know where the center of the sphere is for every robot pose. The robot reports where its tool center point (TCP) is, so the TCP must be set to the center of the sphere. The robot cannot see the sphere, so the TCP is found mechanically, with the three-ball nest.
 
@@ -176,7 +198,7 @@ It prints one line per pose and a verdict. Things it flags, and what they mean:
 
 - Low valid fraction (below 50 percent of frames): the target was not read; check exposure, or the target was outside the field.
 - Valid region touching the image border: the target is partly out of view; the pose is unusable, re-plan it slightly inward.
-- Sphere center residual above 2 mm against the commanded position: either the robot position was copied wrongly for that pose, or, if it affects every pose of one sphere, that sphere's TCP is wrong; or, if it grows steadily across the volume, the robot's base frame or its absolute accuracy is off.
+- Sphere center residual above 2 mm against the commanded position: either the robot position was copied wrongly for that pose, or, if it affects every pose of one sphere, that sphere's TCP is wrong (section 3b); or, if it grows steadily across the volume, the robot's base frame or its absolute accuracy is off.
 - Board normal more than 2 degrees from the commanded direction: the board tool frame's orientation is wrong (section 4, step 5) or the rotation type in the pose log is misnamed.
 
 Re-capture flagged poses after fixing the cause; do not delete the lines from the log, add corrected lines with a new pose id (for example `s038_z0425_017r`). The check tool's exit code is 0 when nothing is flagged, 1 when something is, and 2 when it cannot read the manifest.

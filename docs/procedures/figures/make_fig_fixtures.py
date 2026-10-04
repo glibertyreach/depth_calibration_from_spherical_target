@@ -27,7 +27,7 @@ from matplotlib.patches import Circle, FancyArrowPatch, Polygon, Rectangle
 
 SPHERE_RADIUS_MM = 40.0
 STEM_LENGTH_MM = 130.0          # flange face to sphere surface
-STEM_DIAMETER_MM = 10.0
+STEM_DIAMETER_MM = 16.0
 ADAPTER_THICKNESS_MM = 12.0
 ADAPTER_WIDTH_MM = 80.0
 FLANGE_WIDTH_MM = 63.0          # a common ISO 9409 flange pattern size
