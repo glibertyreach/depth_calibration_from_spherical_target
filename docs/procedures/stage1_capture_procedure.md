@@ -3,7 +3,7 @@
 Audience: the robot technician who will set up the fixtures, program the
 robot, and record the captures. No knowledge of the calibration math is
 needed. Where a step says "run", a computer with Python and this repository
-is needed; the engineer can run those steps for you if you send the files.
+is needed (appendix C says how to set it up); the engineer can run those steps for you if you send the files.
 
 What you are producing: a folder of sensor capture files (`.mc`), one group of
 files per robot pose, plus a small table (the manifest) that says, for every
@@ -289,14 +289,7 @@ What to ship to the capture computer. Ship the whole `sphcal/` directory togethe
 
 The fit itself (`sphcal/cli/fit.py`, with the rest of `sphcal/calibration/` and `sphcal/spline/`) is not part of the capture procedure; the engineer runs it on the deliverables of section 10. The design document `docs/design/code_design.md` describes it.
 
-Installing and running. The tools need Python 3.10 or later and the packages in `requirements.txt` (numpy, scipy, matplotlib). From the repository's top directory:
-
-```
-pip install -r requirements.txt
-python3 -m pytest -q tests/test_cli_tools.py
-```
-
-The second line runs the tools' self-test and should print only passes; it needs the `simulate` files marked "self-test" in the table. Every tool is run as a module from the top directory, as in the commands of sections 5, 7 and 8, and every tool prints the help below with `--help`.
+Installing and running the tools is spelled out step by step in appendix C. Every tool prints the help below with `--help`.
 
 Default settings. The plan tool's defaults are: depth range 300 to 1,100 mm; near sphere radius 40 mm, far sphere radius 80 mm, switching at 550 mm with a 50 mm overlap band; grid spacing 1.5 radii; 80 percent field fill; 3 near and 4 far depth planes; board half-size 120 x 90 mm at depths 350, 550, 800 and 1,050 mm, tilts 0, 20 and 40 degrees about two azimuths (0 and 90 degrees), 2 lateral positions at 50 percent field fill; 10 pixel edge margin; 20 percent hold-out; bootstrap residual warning at 5 mm. The commands in section 5 override the radii, the field fill and the board size for the fixtures of section 1. The check tool's defaults are: sphere fit or center residual warning at 2 mm; plane residual warning at 2 mm; minimum valid fraction 0.5; border margin 4 pixels; board normal warning at 2 degrees. The manifest tool writes CSV unless `--format json` is given.
 
@@ -429,3 +422,60 @@ options:
                         by more than this
   --out PATH            write a JSON report here
 ```
+
+## Appendix C. Installing and running the software, step by step
+
+These steps were checked on Linux with Python 3.11 in a fresh environment; the Windows commands follow the same pattern and differ only where noted. Allow about 20 minutes, most of it download time. Nothing here needs administrator rights.
+
+C.1 Install Python. Python 3.10 or newer is required.
+
+- Windows: download the installer for the latest Python 3 from python.org/downloads and run it. On the first screen tick "Add python.exe to PATH" before clicking Install. When it finishes, open a new Command Prompt (Start menu, type `cmd`) and type `python --version`; it must print `Python 3.10` or higher. If it prints nothing or an error, the PATH box was not ticked: run the installer again and choose Modify.
+- Linux (Debian or Ubuntu): in a terminal, `sudo apt install python3 python3-venv python3-pip`, then `python3 --version`.
+
+On Windows the Python command is `python`; on Linux it is `python3`. The commands below are written with `python3`; on Windows type `python` instead. Everything else is identical.
+
+C.2 Get the code. Either unzip the archive the engineer sent, or, if `git` is installed, clone the repository. Put it somewhere without spaces in the path, for example `C:\cal\depth_calibration` on Windows or `~/cal/depth_calibration` on Linux. Inside that folder you must see `pyproject.toml`, `requirements.txt`, the folder `sphcal` and the folder `tests`. That folder is called the repository folder below.
+
+C.3 Open a terminal in the repository folder. Windows: in File Explorer, open the repository folder, click in the address bar, type `cmd` and press Enter; a Command Prompt opens already in that folder. Linux: `cd ~/cal/depth_calibration`. Check with `dir` (Windows) or `ls` (Linux) that `pyproject.toml` is listed; if it is not, you are in the wrong folder and every later step will fail with "No module named sphcal".
+
+C.4 Make a private Python environment and install into it. This keeps the tools' packages separate from anything else on the computer. In the terminal from C.3:
+
+```
+python3 -m venv .venv
+```
+
+then activate it, which you must do again in every new terminal before using the tools:
+
+```
+.venv\Scripts\activate          (Windows)
+source .venv/bin/activate       (Linux)
+```
+
+The prompt now starts with `(.venv)`. Then install the package and everything it needs (numpy, scipy, matplotlib, pytest; about 150 MB, downloaded from the internet):
+
+```
+python3 -m pip install -e ".[figures,test]"
+```
+
+The `-e` installs the code in place, so the tools can be run from any folder once the environment is active, and a corrected file from the engineer takes effect by simply replacing it. If the computer has no internet, the engineer can supply the packages as files; ask.
+
+C.5 Run the self-test. Still in the repository folder:
+
+```
+python3 -m pytest -q tests/test_cli_tools.py
+```
+
+After about ten seconds it must end with a line like `21 passed in 2.3s`. Any line containing `FAILED` or `ERROR` means the installation is not right; copy the whole output into a text file and send it to the engineer. Do not start capturing until this passes.
+
+C.6 Run the tools. Every tool is run as `python3 -m sphcal.cli.<tool>` followed by its options, as in sections 5, 7 and 8. With the environment active (C.4) this works from any folder, so it is simplest to keep a working folder for the session, for example `C:\cal\session_2026_10_14`, put `boot.json`, `pose_log.csv` and the `captures` folder in it, open the terminal there (C.3) and give file names relative to it. Each tool prints what it wrote. Three things to know:
+
+- A message starting with `ERROR:` means the tool stopped and wrote nothing; it says what is wrong in the input and which pose or file it concerns. Fix that and run it again.
+- A message starting with `WARNING:` means the tool finished but something should be looked at; the plan tool, for example, still writes `poses.csv` without matplotlib and only skips the picture.
+- `python3 -m sphcal.cli.<tool> --help` prints the option list (appendix B).
+
+C.7 If something goes wrong.
+
+- "No module named sphcal": the environment is not active (the prompt does not start with `(.venv)`), or step C.4 was done in a different folder. Activate it and retry; if that fails, redo C.3 and C.4.
+- "python3 is not recognized" on Windows: type `python` instead; if that also fails, redo C.1.
+- "pip install" fails with a network or certificate error: the computer's internet access is blocked; ask the engineer for the package files or for the proxy settings.
+- A traceback (many lines ending in an exception name) from any tool is a software fault, not an input fault: save the whole output and the input files and send them to the engineer.

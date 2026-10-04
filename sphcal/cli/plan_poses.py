@@ -635,8 +635,15 @@ def main(argv: list[str] | None = None) -> int:
     write_poses_csv(args.out / PLAN_CSV_NAME, poses, sensor_to_base)
     text = summary_text(params, camera, poses, board_counts, source, bootstrap_lines)
     (args.out / PLAN_SUMMARY_NAME).write_text(text, encoding="utf-8")
-    write_plan_figure(args.out / PLAN_FIGURE_NAME, params, camera, poses)
     print(text, end="")
+    try:
+        write_plan_figure(args.out / PLAN_FIGURE_NAME, params, camera, poses)
+    except ModuleNotFoundError as error:
+        # The picture is a convenience; the plan itself is complete without it.
+        print(f"WARNING: {PLAN_FIGURE_NAME} not written because the plotting package is missing "
+              f"({error}); install matplotlib (pip install matplotlib) to get the picture.", file=sys.stderr)
+        print(f"Wrote {args.out / PLAN_CSV_NAME} and {args.out / PLAN_SUMMARY_NAME}")
+        return EXIT_OK
     print(f"Wrote {args.out / PLAN_CSV_NAME}, {args.out / PLAN_SUMMARY_NAME} and {args.out / PLAN_FIGURE_NAME}")
     return EXIT_OK
 

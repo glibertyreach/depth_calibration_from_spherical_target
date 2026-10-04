@@ -12,7 +12,7 @@ fitted from observations of spheres and flat boards at commanded poses.
 ## Quick start
 
 ```
-pip install -r requirements.txt
+pip install -e ".[figures,test]"   # or: pip install -r requirements.txt, and run from this directory
 python3 -m pytest -q
 python3 -m sphcal.cli.simulate --out data/synthetic --poses 80 --frames 3
 python3 -m sphcal.cli.fit --manifest data/synthetic/manifest.json --out results/synthetic
