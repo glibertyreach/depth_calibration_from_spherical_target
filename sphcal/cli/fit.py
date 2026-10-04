@@ -12,7 +12,7 @@ import argparse
 import json
 from pathlib import Path
 
-from sphcal.calibration.correction import CorrectionFitParameters, fit_correction
+from sphcal.calibration.correction import CorrectionFitParameters, SmoothingSelection, fit_correction
 from sphcal.calibration.noread import NoReadFitParameters, fit_noread
 from sphcal.io.capture_set import CaptureSet
 from sphcal.io.poses import load_manifest, records_from_headers
@@ -41,15 +41,14 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--half-width-mm", type=float)
     parser.add_argument("--half-height-mm", type=float)
     parser.add_argument("--out", required=True, help="output directory")
-    parser.add_argument("--no-gcv", action="store_true", help="skip the GCV search over smoothing parameters")
+    parser.add_argument("--smoothing", choices=("pose_cv", "gcv", "none"), default="pose_cv",
+                        help="how smoothing parameters are selected")
     parser.add_argument("--skip-noread", action="store_true")
     args = parser.parse_args(argv)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     capture_set = build_capture_set(args)
-    params = CorrectionFitParameters()
-    if args.no_gcv:
-        params = CorrectionFitParameters(smoothing_grid=None)
+    params = CorrectionFitParameters(smoothing=SmoothingSelection(method=args.smoothing))
     result = fit_correction(capture_set, params)
     result.model.metadata.update({"sensor_to_positioner": result.sensor_to_positioner.as_matrix().tolist(),
                                   "training_poses": result.training_poses, "holdout_poses": result.holdout_poses})

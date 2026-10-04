@@ -44,7 +44,12 @@ class SampleParameters:
     effective_block_px: int = 4
     """Lateral pitch of one independent depth sample in native pixels (D-4):
     native pixels within a block are not independent, so each gets the weight
-    1 / block^2."""
+    1 / block^2 (times stride^2 when the stride below skips pixels)."""
+    pixel_stride: int = 4
+    """Take every stride-th pixel in u and in v as a sample. With the stride
+    equal to the effective block, one sample per block carries the block's
+    information and the design matrix is stride^2 times smaller; the
+    correction is still evaluated at every native pixel (D-4)."""
     min_temporal_valid_fraction: float = 0.8
     """A pixel must have read in at least this fraction of a pose's frames to be a sample."""
     variance_floor_mm2: float = 1.0e-4
@@ -55,6 +60,21 @@ class SampleParameters:
     max_abs_residual_mm: float = 20.0
     """Gross-error gate: a residual larger than this is a mixed pixel or a wrong
     pose, not a calibration error, and is excluded before any fitting."""
+    max_abs_slope: float = 1.5
+    """Samples whose measured slope component exceeds this (tan of about 56
+    degrees) are outside the map's slope domain and are excluded; the window
+    estimator can report such values near a sphere's limb."""
+    variance_pooling_incidence_bin_deg: float = 10.0
+    """Per-pixel variances from a handful of frames are far too noisy to serve
+    as weights one by one (a sample variance from three frames scatters by a
+    factor of several). They are therefore pooled within each pose over bins of
+    predicted incidence of this width, and every pixel of a bin gets the bin's
+    pooled variance."""
+    variance_pooling_min_pixels: int = 30
+    """A bin with fewer pixels than this takes the pose-wide pooled variance."""
+    variance_trim_fraction: float = 0.05
+    """Fraction of the largest per-pixel variances dropped before pooling, so
+    that flying pixels do not inflate the pooled value."""
 
 
 @dataclass
@@ -119,10 +139,53 @@ def measured_range_variance(depth_variance: np.ndarray, depth_mean: np.ndarray, 
     return depth_variance * factor ** 2
 
 
+def pooled_variance(variance: np.ndarray, cos_incidence: np.ndarray, selection: np.ndarray,
+                    params: SampleParameters) -> np.ndarray:
+    """
+    Replace per-pixel variances by their trimmed mean over incidence bins of the
+    pose (see SampleParameters.variance_pooling_incidence_bin_deg). Returns an
+    image of pooled variances over the selected pixels, NaN elsewhere.
+    """
+    pooled = np.full(variance.shape, np.nan)
+    values = variance[selection]
+    finite = np.isfinite(values)
+    if not finite.any():
+        return pooled
+
+    def trimmed_mean(v: np.ndarray) -> float:
+        v = np.sort(v[np.isfinite(v)])
+        keep = max(1, int(round(v.size * (1.0 - params.variance_trim_fraction))))
+        return float(v[:keep].mean())
+
+    pose_wide = trimmed_mean(values)
+    incidence = np.degrees(np.arccos(np.clip(cos_incidence[selection], -1.0, 1.0)))
+    bins = np.floor(incidence / params.variance_pooling_incidence_bin_deg).astype(int)
+    result = np.full(values.shape, pose_wide)
+    for b in np.unique(bins):
+        in_bin = (bins == b) & finite
+        if in_bin.sum() >= params.variance_pooling_min_pixels:
+            result[bins == b] = trimmed_mean(values[in_bin])
+    pooled[selection] = result
+    return pooled
+
+
+def stride_mask(shape: tuple[int, int], stride: int) -> np.ndarray:
+    """True on every stride-th pixel in both directions, starting at the half-stride offset."""
+    mask = np.zeros(shape, dtype=bool)
+    offset = stride // 2
+    mask[offset::stride, offset::stride] = True
+    return mask
+
+
+def sample_weight_factor(params: SampleParameters) -> float:
+    """Block-independence factor adjusted for the stride: stride^2 / block^2, at most 1."""
+    return min(1.0, block_independence_weight(params.effective_block_px) * params.pixel_stride ** 2)
+
+
 def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTransform,
                              params: SampleParameters) -> SampleTable:
     """Assemble the correction-sample table over every pose of the capture set."""
-    block_weight = block_independence_weight(params.effective_block_px)
+    block_weight = sample_weight_factor(params)
     rows_inputs, rows_target, rows_weight, rows_pose, rows_pixel = [], [], [], [], []
     rows_ray, rows_point, rows_cos = [], [], []
     pose_ids, pose_kinds, frames_per_pose = [], [], []
@@ -140,9 +203,14 @@ def build_correction_samples(capture_set: CaptureSet, sensor_to_positioner: Rigi
         residual = coverage.range_mm - measured_range
         usable = coverage.usable & valid & np.isfinite(slope_u) & np.isfinite(slope_v) & np.isfinite(residual)
         usable &= np.abs(residual) <= params.max_abs_residual_mm
+        usable &= (np.abs(slope_u) <= params.max_abs_slope) & (np.abs(slope_v) <= params.max_abs_slope)
+        usable &= stride_mask(usable.shape, params.pixel_stride)
         n_frames = depth_stack.shape[0]
         if n_frames > 1:
-            variance = measured_range_variance(stats.variance, mean_depth, measured_range)
+            per_pixel = measured_range_variance(stats.variance, mean_depth, measured_range)
+            # The variance of the temporal MEAN is the per-frame variance over the frame count.
+            per_pixel = per_pixel / n_frames
+            variance = pooled_variance(per_pixel, coverage.cos_incidence, usable, params)
             variance = np.where(np.isfinite(variance), variance, params.single_frame_variance_mm2)
         else:
             variance = np.full(mean_depth.shape, params.single_frame_variance_mm2)
@@ -180,7 +248,7 @@ def build_noread_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTra
     slopes of the PREDICTED depth image computed with the same window estimator
     as the measured slopes, so that the two maps index slope the same way.
     """
-    block_weight = block_independence_weight(params.effective_block_px)
+    block_weight = sample_weight_factor(params)
     rows_inputs, rows_fraction, rows_trials, rows_pose, rows_cos = [], [], [], [], []
     for pose_number, pose_id in enumerate(capture_set.pose_ids()):
         stack = capture_set.load_stack(pose_id)
@@ -194,7 +262,7 @@ def build_noread_samples(capture_set: CaptureSet, sensor_to_positioner: RigidTra
         rays = camera.ray_directions()
         predicted_depth = np.where(covered, coverage.range_mm * rays[..., 2], np.nan)
         slope_u, slope_v = image_slopes(predicted_depth, covered, camera, params.slope)
-        usable = covered & np.isfinite(slope_u) & np.isfinite(slope_v)
+        usable = covered & np.isfinite(slope_u) & np.isfinite(slope_v) & stride_mask(covered.shape, params.pixel_stride)
         sel = np.nonzero(usable)
         n = sel[0].size
         rows_inputs.append(np.column_stack([u_grid[sel], v_grid[sel], coverage.range_mm[sel], slope_u[sel],

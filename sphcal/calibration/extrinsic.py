@@ -22,6 +22,10 @@ ALGEBRAIC_FIT_MIN_POINTS = 4
 plus one auxiliary; fewer points than this cannot determine it."""
 
 
+MEDIAN_ABSOLUTE_DEVIATION_TO_SIGMA = 1.4826
+"""Factor converting a median absolute deviation into a Gaussian sigma."""
+
+
 @dataclass(frozen=True)
 class SphereFitParameters:
     max_iterations: int = 20
@@ -31,15 +35,37 @@ class SphereFitParameters:
     huber_delta_mm: float = 1.0
     """Residuals beyond this get a Huber down-weighting; mixed pixels and
     specular points are the targets of this."""
+    trimming_rounds: int = 3
+    """Rounds of algebraic fit, residual scale estimate, and removal of gross
+    outliers before the geometric fit starts. Flying pixels at a sphere's limb
+    can be hundreds of millimeters off and would otherwise ruin the start."""
+    trimming_sigma_multiple: float = 5.0
+    """A point whose algebraic residual exceeds this multiple of the robust
+    residual scale (median absolute deviation times the Gaussian factor) is
+    removed during trimming."""
+    min_points: int = 12
+    """Fewer points than this and the fit is refused (returns NaN center)."""
+
+
+@dataclass(frozen=True)
+class TransformSolveParameters:
+    max_center_residual_mm: float = 2.0
+    """A sphere pose whose fitted center disagrees with the solved transform by
+    more than this is dropped and the transform re-solved; such a pose is a
+    failed fit or a wrong commanded position, not a calibration signal."""
+    max_rounds: int = 3
+    """Rounds of solve, gate, re-solve."""
 
 
 @dataclass(frozen=True)
 class ExtrinsicParameters:
     sphere_fit: SphereFitParameters = SphereFitParameters()
+    transform_solve: TransformSolveParameters = TransformSolveParameters()
     min_sphere_poses: int = 3
     """A rigid transform needs at least three non-collinear sphere centers."""
-    max_alternation_rounds: int = 6
-    """Rounds of (fit map, correct points, refit centers, resolve transform)."""
+    max_alternation_rounds: int = 12
+    """Rounds of (fit map, fold its rigid component into the transform, rebuild
+    targets); the transform change contracts by roughly half per round."""
     convergence_translation_mm: float = 0.005
     convergence_rotation_deg: float = 0.002
     """The alternation stops when the transform changes by less than both."""
@@ -70,7 +96,25 @@ def fit_sphere_center(points: np.ndarray, radius_mm: float, params: SphereFitPar
     """
     p = np.asarray(points, dtype=np.float64).reshape(-1, 3)
     base_weights = np.ones(p.shape[0]) if weights is None else np.asarray(weights, dtype=np.float64)
-    center = algebraic_sphere_center(p, radius_mm, base_weights) if initial_center is None else np.asarray(initial_center, dtype=np.float64)
+    if p.shape[0] < params.min_points:
+        return np.full(3, np.nan)
+    if initial_center is None:
+        # Trimmed algebraic start: gross outliers (flying pixels) are removed
+        # by a robust scale test before the geometric refinement begins.
+        keep = np.ones(p.shape[0], dtype=bool)
+        center = algebraic_sphere_center(p, radius_mm, base_weights)
+        for _ in range(params.trimming_rounds):
+            residual = np.linalg.norm(p - center, axis=1) - radius_mm
+            scale = MEDIAN_ABSOLUTE_DEVIATION_TO_SIGMA * np.median(np.abs(residual[keep] - np.median(residual[keep])))
+            scale = max(scale, params.convergence_mm)
+            new_keep = np.abs(residual - np.median(residual[keep])) <= params.trimming_sigma_multiple * scale
+            if new_keep.sum() < params.min_points or np.array_equal(new_keep, keep):
+                break
+            keep = new_keep
+            center = algebraic_sphere_center(p[keep], radius_mm, base_weights[keep])
+        base_weights = np.where(keep, base_weights, 0.0)
+    else:
+        center = np.asarray(initial_center, dtype=np.float64)
     for _ in range(params.max_iterations):
         offsets = p - center
         distances = np.linalg.norm(offsets, axis=1)
@@ -89,9 +133,28 @@ def fit_sphere_center(points: np.ndarray, radius_mm: float, params: SphereFitPar
 
 
 def solve_sensor_to_positioner(centers_sensor: np.ndarray, centers_positioner: np.ndarray,
-                               weights: np.ndarray | None = None) -> RigidTransform:
-    """Rigid transform mapping sensor-frame centers onto commanded positioner-frame centers."""
-    return fit_rigid_transform(centers_sensor, centers_positioner, weights)
+                               weights: np.ndarray | None = None,
+                               params: TransformSolveParameters = TransformSolveParameters()) -> RigidTransform:
+    """
+    Rigid transform mapping sensor-frame centers onto commanded positioner-frame
+    centers, with poses whose center residual exceeds the gate dropped and the
+    solve repeated. Poses with a NaN center (refused fits) are ignored.
+    """
+    source = np.asarray(centers_sensor, dtype=np.float64).reshape(-1, 3)
+    target = np.asarray(centers_positioner, dtype=np.float64).reshape(-1, 3)
+    w = np.ones(source.shape[0]) if weights is None else np.asarray(weights, dtype=np.float64)
+    keep = np.isfinite(source).all(axis=1)
+    transform = None
+    for _ in range(params.max_rounds):
+        if keep.sum() < 3:
+            raise ValueError("fewer than three usable sphere centers for the transform solve")
+        transform = fit_rigid_transform(source[keep], target[keep], w[keep])
+        residual = np.linalg.norm(transform.apply_points(source) - target, axis=1)
+        new_keep = keep & (residual <= params.max_center_residual_mm)
+        if np.array_equal(new_keep, keep):
+            break
+        keep = new_keep
+    return transform
 
 
 def rigid_component_of_displacements(points: np.ndarray, displacements: np.ndarray,

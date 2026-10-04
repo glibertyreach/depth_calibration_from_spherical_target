@@ -23,7 +23,7 @@ from sphcal.calibration.model_config import ModelConfiguration, build_model, def
 from sphcal.calibration.samples import SampleParameters, SampleTable, build_correction_samples
 from sphcal.geometry.transforms import RigidTransform
 from sphcal.io.capture_set import CaptureSet
-from sphcal.spline.fit import RobustParameters, SmoothingGrid, fit_robust, select_smoothing_by_gcv
+from sphcal.spline.fit import RobustParameters, SmoothingGrid, fit_penalized_least_squares, fit_robust, select_smoothing_by_gcv
 from sphcal.spline.model import SumOfTermsSpline
 
 
@@ -37,13 +37,29 @@ class HoldoutParameters:
 
 
 @dataclass(frozen=True)
+class SmoothingSelection:
+    """How the smoothing parameters are chosen."""
+
+    method: str = "pose_cv"
+    """"pose_cv": cross-validation with whole poses held out, which respects the
+    correlation of native pixels within a pose and within an effective block;
+    "gcv": the generalized cross-validation of the spline module, which counts
+    every row as independent and therefore undersmooths correlated pixels;
+    "none": keep the configured initial smoothing."""
+    folds: int = 3
+    """Number of pose folds for "pose_cv"."""
+    grid: SmoothingGrid = field(default_factory=lambda: SmoothingGrid(log10_min=-3.0, log10_max=4.0, n_values=8, n_rounds=1))
+    """Multipliers 10^g applied to each term's smoothing vector, searched term by term."""
+    seed: int = 7
+
+
+@dataclass(frozen=True)
 class CorrectionFitParameters:
     samples: SampleParameters = field(default_factory=SampleParameters)
     extrinsic: ExtrinsicParameters = field(default_factory=ExtrinsicParameters)
     model: ModelConfiguration = field(default_factory=default_configuration)
     robust: RobustParameters = field(default_factory=RobustParameters)
-    smoothing_grid: SmoothingGrid | None = field(default_factory=SmoothingGrid)
-    """Grid for the GCV search over smoothing parameters; None keeps the initial values."""
+    smoothing: SmoothingSelection = field(default_factory=SmoothingSelection)
     holdout: HoldoutParameters = field(default_factory=HoldoutParameters)
     select_smoothing_every_round: bool = False
     """GCV selection is costly; by default it runs in the first round only and the
@@ -85,10 +101,17 @@ def split_poses(capture_set: CaptureSet, params: HoldoutParameters) -> tuple[lis
     rng = np.random.default_rng(params.seed)
     pose_ids = capture_set.pose_ids()
     kinds = {pid: capture_set.records_for(pid)[0].target_kind for pid in pose_ids}
-    order = rng.permutation(len(pose_ids))
-    n_holdout = int(round(params.fraction * len(pose_ids)))
-    holdout = [pose_ids[i] for i in order[:n_holdout]]
-    training = [pose_ids[i] for i in order[n_holdout:]]
+    # Stratified by target kind, so that both spheres and boards appear in the
+    # held-out set whenever the capture holds both.
+    holdout, training = [], []
+    for kind in sorted(set(kinds.values())):
+        of_kind = [pid for pid in pose_ids if kinds[pid] == kind]
+        order = rng.permutation(len(of_kind))
+        n_holdout = int(round(params.fraction * len(of_kind)))
+        holdout.extend(of_kind[i] for i in order[:n_holdout])
+        training.extend(of_kind[i] for i in order[n_holdout:])
+    training = [pid for pid in pose_ids if pid in set(training)]
+    holdout = [pid for pid in pose_ids if pid in set(holdout)]
     n_training_spheres = sum(1 for pid in training if kinds[pid] == "sphere")
     if n_training_spheres < params.min_training_sphere_poses:
         raise ValueError(f"only {n_training_spheres} sphere poses would remain for training; "
@@ -112,7 +135,8 @@ def initial_transform(capture_set: CaptureSet, pose_ids: list[str], params: Corr
         centers_positioner.append(record.target_pose_positioner.translation)
     if len(centers_sensor) < params.extrinsic.min_sphere_poses:
         raise ValueError("not enough sphere poses to solve the sensor-to-positioner transform")
-    return solve_sensor_to_positioner(np.array(centers_sensor), np.array(centers_positioner))
+    return solve_sensor_to_positioner(np.array(centers_sensor), np.array(centers_positioner),
+                                      params=params.extrinsic.transform_solve)
 
 
 def _temporal_mean_points(xyz_stack: np.ndarray, valid_stack: np.ndarray, min_valid_fraction: float) -> np.ndarray:
@@ -124,11 +148,57 @@ def _temporal_mean_points(xyz_stack: np.ndarray, valid_stack: np.ndarray, min_va
     return np.where(enough[..., None], mean, np.nan)
 
 
+def select_smoothing_by_pose_cv(model: SumOfTermsSpline, samples: SampleTable, selection: SmoothingSelection) -> SumOfTermsSpline:
+    """
+    Choose each term's smoothing multiplier by K-fold cross-validation with
+    whole poses held out: for each term in turn and each grid value, fit (plain
+    penalized least squares) on the other folds and score the weighted RMS on
+    the held fold; keep the multiplier with the smallest total score.
+    """
+    rng = np.random.default_rng(selection.seed)
+    n_poses = len(samples.pose_ids)
+    fold_of_pose = rng.permutation(n_poses) % selection.folds
+    fold = fold_of_pose[samples.pose_index]
+    design = model.design(samples.inputs)
+    grid = selection.grid
+    multipliers = np.logspace(grid.log10_min, grid.log10_max, grid.n_values)
+    base = [list(term.smoothing) for term in model.terms]
+    chosen = [1.0] * len(model.terms)
+
+    def cv_score() -> float:
+        penalty = model.penalty()
+        total, count = 0.0, 0.0
+        for k in range(selection.folds):
+            train, test = fold != k, fold == k
+            if not test.any() or not train.any():
+                continue
+            fit = fit_penalized_least_squares(design[train], samples.target[train], samples.weight[train], penalty)
+            residual = samples.target[test] - design[test] @ fit.coefficients
+            total += float(np.sum(samples.weight[test] * residual ** 2))
+            count += float(np.sum(samples.weight[test]))
+        return total / count
+
+    for _ in range(grid.n_rounds):
+        for t_index, term in enumerate(model.terms):
+            best_score, best_multiplier = np.inf, chosen[t_index]
+            for multiplier in multipliers:
+                term.smoothing = [b * multiplier for b in base[t_index]]
+                score = cv_score()
+                if score < best_score:
+                    best_score, best_multiplier = score, multiplier
+            chosen[t_index] = best_multiplier
+            term.smoothing = [b * best_multiplier for b in base[t_index]]
+    model.metadata["smoothing_multipliers"] = {term.name: float(m) for term, m in zip(model.terms, chosen)}
+    return model
+
+
 def _fit_model_on(samples: SampleTable, model: SumOfTermsSpline, params: CorrectionFitParameters,
                   select_smoothing: bool) -> SumOfTermsSpline:
-    """S3: the penalized robust fit, with an optional GCV search over smoothing."""
-    if select_smoothing and params.smoothing_grid is not None:
-        model = select_smoothing_by_gcv(model, samples.inputs, samples.target, samples.weight, params.smoothing_grid)
+    """S3: the penalized robust fit, with an optional search over smoothing."""
+    if select_smoothing and params.smoothing.method == "pose_cv":
+        model = select_smoothing_by_pose_cv(model, samples, params.smoothing)
+    elif select_smoothing and params.smoothing.method == "gcv":
+        model = select_smoothing_by_gcv(model, samples.inputs, samples.target, samples.weight, params.smoothing.grid)
     design = model.design(samples.inputs)
     result = fit_robust(design, samples.target, samples.weight, model.penalty(), params.robust)
     model.coefficients = result.coefficients
@@ -137,7 +207,10 @@ def _fit_model_on(samples: SampleTable, model: SumOfTermsSpline, params: Correct
 
 def _refit_transform(capture_set: CaptureSet, samples: SampleTable, model: SumOfTermsSpline,
                      params: CorrectionFitParameters) -> RigidTransform:
-    """S4: correct the sample points with the current map, refit sphere centers, re-solve the transform."""
+    """Diagnostic form of S4: correct the sample points with the current map,
+    refit the sphere centers, re-solve the transform. The fitting loop uses the
+    rigid component of the map instead (see fit_correction), which has a
+    definite fixed point; this function is kept for reports and tests."""
     delta = model.evaluate(samples.inputs)
     corrected_points = samples.ray_direction * (samples.inputs[:, 2] + delta)[:, None]
     centers_sensor, centers_positioner = [], []
@@ -152,7 +225,8 @@ def _refit_transform(capture_set: CaptureSet, samples: SampleTable, model: SumOf
                                    weights=samples.weight[mask])
         centers_sensor.append(center)
         centers_positioner.append(record.target_pose_positioner.translation)
-    return solve_sensor_to_positioner(np.array(centers_sensor), np.array(centers_positioner))
+    return solve_sensor_to_positioner(np.array(centers_sensor), np.array(centers_positioner),
+                                      params=params.extrinsic.transform_solve)
 
 
 def fit_correction(capture_set: CaptureSet, params: CorrectionFitParameters,
@@ -177,7 +251,14 @@ def fit_correction(capture_set: CaptureSet, params: CorrectionFitParameters,
         delta = model.evaluate(samples.inputs)
         t_rigid, omega_rigid = rigid_component_of_displacements(samples.measured_point,
                                                                 samples.ray_direction * delta[:, None], samples.weight)
-        new_transform = _refit_transform(training_set, samples, model, params)
+        # Gauge (D-1): the map must carry no rigid motion. Its best-fitting rigid
+        # component G (p -> p + t + omega x p) is folded into the transform: a
+        # point the map would move by G and the old transform would then carry
+        # into the positioner frame is carried there by transform o G instead,
+        # and the next map fit, against targets rebuilt under the new transform,
+        # no longer needs that component. The fixed point is G = identity.
+        rigid_part = RigidTransform.from_rotation_vector_degrees(np.degrees(omega_rigid), t_rigid)
+        new_transform = transform.compose(rigid_part)
         dt, drot = new_transform.difference_from(transform)
         rounds.append(AlternationRound(round_index, new_transform, dt, drot, rms, t_rigid, np.degrees(omega_rigid)))
         transform = new_transform
