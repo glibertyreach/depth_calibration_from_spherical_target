@@ -79,7 +79,8 @@ def draw_joint(ax):
     ax.annotate(f"threaded spigot {SPIGOT_THREAD}\nin the adapter's tapped hole", (x0 + ADAPTER_THICKNESS_MM / 2, -SPIGOT_DIAMETER_MM / 2),
                 (x0 + 45, -SHOULDER_DIAMETER_MM / 2 - 24), fontsize=7, color=DARK,
                 arrowprops=dict(arrowstyle="-", color=DARK, lw=0.7))
-    ax.text(stem_x0 + 58, 0.0, f"stem, ground\nsteel, {STEM_DIAMETER_MM:.0f} mm", fontsize=7, ha="left", va="center", color=DARK)
+    ax.text(stem_x0 + 32, STEM_DIAMETER_MM / 2 + 5, f"stem, ground steel, {STEM_DIAMETER_MM:.0f} mm", fontsize=7,
+            ha="center", va="bottom", color=DARK)
     ax.text(x0 - FLANGE_THICKNESS_MM - 2, 0.0, "robot\nflange", fontsize=7, ha="right", va="center")
     ax.text(x0 + ADAPTER_THICKNESS_MM / 2, ADAPTER_DIAMETER_MM / 2 + 4, "adapter plate", fontsize=7, ha="center")
     ax.set_xlim(x0 - FLANGE_THICKNESS_MM - 28, stem_x0 + 110)
