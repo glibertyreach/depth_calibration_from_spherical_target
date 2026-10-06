@@ -17,7 +17,7 @@ from sphcal.calibration.noread import NoReadFitParameters, fit_noread
 from sphcal.io.capture_set import CaptureSet
 from sphcal.io.poses import load_manifest, records_from_headers
 from sphcal.validation.report import ReportParameters, binned_residuals, board_normal_bias, plot_residuals_by_incidence, \
-    sphere_center_errors, write_report
+    shape_checks, sphere_center_errors, write_report
 
 
 def build_capture_set(args: argparse.Namespace) -> CaptureSet:
@@ -65,6 +65,8 @@ def main(argv: list[str] | None = None) -> None:
         plot_residuals_by_incidence(report["holdout"], out / "holdout_residual_by_incidence.png")
         report["holdout_sphere_centers"] = sphere_center_errors(capture_set, result.holdout_poses, result.model,
                                                                 result.sensor_to_positioner, params.samples, report_params)
+        report["holdout_shape_checks"] = shape_checks(capture_set, result.holdout_poses, result.model,
+                                                      result.sensor_to_positioner, params.samples, report_params)
         report["holdout_board_normals"] = board_normal_bias(capture_set, result.holdout_poses, result.model,
                                                             result.sensor_to_positioner, params.samples, report_params)
     if not args.skip_noread:

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import json
+
 import numpy as np
 import pytest
 
@@ -22,9 +24,11 @@ from sphcal.geometry.targets import CoverageParameters
 from sphcal.geometry.transforms import RigidTransform
 from sphcal.io.capture_set import CaptureSet
 from sphcal.io.poses import load_manifest
+from sphcal.cli import fit as fit_cli
 from sphcal.simulate.synthetic import SyntheticSensorParameters, default_injected_error_field_for_camera, \
     write_synthetic_dataset
 from sphcal.spline.fit import RobustParameters, SmoothingGrid
+from sphcal.validation.report import ReportParameters, shape_checks
 
 # A small camera keeps the test fast: the indicative 640 x 480 geometry scaled by 1/4.
 TEST_SCALE = 0.25
@@ -151,3 +155,40 @@ def test_noread_onset_recovered(synthetic_dataset: Path):
     onsets = [v for v in result.onset_by_azimuth_deg.values() if v is not None]
     assert onsets, result.onset_by_azimuth_deg
     assert all(abs(o - 55.0) < NOREAD_ONSET_TOLERANCE_DEG for o in onsets), result.onset_by_azimuth_deg
+
+
+@pytest.fixture(scope="module")
+def fitted(synthetic_dataset: Path):
+    """The capture set and its fit, shared by the tests of held-out report content."""
+    capture_set = CaptureSet(load_manifest(synthetic_dataset / "manifest.json"))
+    return capture_set, fit_correction(capture_set, fit_parameters())
+
+
+def test_shape_checks_improve_on_held_out_poses(fitted):
+    """Robot-independent checks: flatness of held-out boards and free-radius spheres must improve after correction."""
+    capture_set, result = fitted
+    rows = shape_checks(capture_set, result.holdout_poses, result.model, result.sensor_to_positioner,
+                        fit_parameters().samples, ReportParameters())
+    boards = [r for r in rows if r["kind"] == "board"]
+    spheres = [r for r in rows if r["kind"] == "sphere"]
+    assert boards and spheres, rows
+    flatness_before = float(np.mean([r["flatness_rms_before_mm"] for r in boards]))
+    flatness_after = float(np.mean([r["flatness_rms_after_mm"] for r in boards]))
+    radius_error_before = float(np.mean([abs(r["radius_error_before_mm"]) for r in spheres]))
+    radius_error_after = float(np.mean([abs(r["radius_error_after_mm"]) for r in spheres]))
+    print(f"held-out boards ({len(boards)}): mean flatness RMS before {flatness_before:.4f} mm, after {flatness_after:.4f} mm")
+    print(f"held-out spheres ({len(spheres)}): mean |radius error| before {radius_error_before:.4f} mm, "
+          f"after {radius_error_after:.4f} mm")
+    assert flatness_after < flatness_before
+    assert radius_error_after < radius_error_before
+
+
+def test_fit_cli_report_contains_shape_checks(fitted, synthetic_dataset: Path, tmp_path: Path, monkeypatch):
+    """The command line writes the shape checks next to the sphere-center errors."""
+    capture_set, result = fitted
+    monkeypatch.setattr(fit_cli, "fit_correction", lambda *args, **kwargs: result)
+    monkeypatch.setattr(fit_cli, "CorrectionFitParameters", lambda **kwargs: fit_parameters())
+    fit_cli.main(["--manifest", str(synthetic_dataset / "manifest.json"), "--out", str(tmp_path), "--skip-noread"])
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert "holdout_sphere_centers" in report
+    assert {row["kind"] for row in report["holdout_shape_checks"]} == {"sphere", "board"}

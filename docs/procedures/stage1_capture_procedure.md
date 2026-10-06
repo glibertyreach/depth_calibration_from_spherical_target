@@ -211,8 +211,8 @@ Re-capture flagged poses after fixing the cause; do not delete the lines from th
 
 No certified ball bar is available, so the session contains no artifact whose geometry is known independently of the robot. Two checks that do not use the robot's positions come from the captures already planned, and the fit's report computes them on the held-out poses; nothing extra has to be captured.
 
-- Sphere shape. Each held-out sphere is fitted with its radius left free. After correction, the fitted radius should agree with the measured radius, and the points should lie closer to the fitted sphere than before.
-- Board flatness. Each held-out board's points are fitted with a plane of their own. After correction, their spread about that plane should fall toward the plate's measured flatness.
+- Sphere shape. Each held-out sphere is fitted with its radius left free. After correction, the fitted radius should agree with the measured radius, and the points should lie closer to the fitted sphere than before. The report gives each fitted radius with its standard error, which is large for a small or distant sphere (the sensor sees only a cap, on which radius and distance trade off); judge each radius error against its own standard error.
+- Board flatness. Each held-out board's points are fitted with a plane of their own. After correction, their spread about that plane should fall toward the plate's measured flatness. This check sees only errors that bend the board's image; an error that shifts or tilts the whole board leaves its flatness unchanged, so it is weaker than the sphere check and mainly catches the fixed pattern.
 
 Your part is to make the references good: measure the sphere diameters carefully (section 3a, items 5 and 6) and keep the board's flatness report with the session notes.
 
