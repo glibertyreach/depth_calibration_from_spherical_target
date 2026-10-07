@@ -5,9 +5,11 @@ and speaker notes) and the figure panels in `../assets/`:
 
 | Content file | Deck |
 |---|---|
-| `stage1_build_deck_content.json` | `../stage1_procurement_build.pptx` (10 slides) |
-| `stage1_procedure_deck_content.json` | `../stage1_test_procedure.pptx` (14 slides) |
+| `stage1_build_deck_content.json` | `../stage1_procurement_build.pptx` (15 slides) |
+| `stage1_procedure_deck_content.json` | `../stage1_test_procedure.pptx` (15 slides) |
 
+Slides are built by the "id" field of each slide in the JSON; each id has one
+builder in the script (tables share one helper that sizes the rows to their text).
 Edit a JSON to change wording; edit the constants at the top of the script to
 change layout, sizes or colors. Figure pixel sizes are read when the script
 runs, so a re-cropped figure needs no code change.

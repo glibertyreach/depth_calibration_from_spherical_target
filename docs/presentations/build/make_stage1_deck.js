@@ -263,6 +263,7 @@ const BOARD_BUILD = {
 	headPt: CARD_HEAD_PT,
 	textPt: BODY_MIN_PT,
 	cardPad: 0.1, // padding inside each of the four cards (tighter than CARD_PAD so four cards fit)
+	textRightPad: 0, // extra space at the right of the card text
 };
 
 // Three-ball nest diagram (native shapes). Dimensions in inches, true to scale with each other:
@@ -310,7 +311,7 @@ const BUILD_LIST = {
 
 // "What must be bought": the full content width; the cost column is right-aligned.
 const BUY_LIST = {
-	colW: [5.0, 5.3, 2.033], // Item, Purpose, Estimated cost (sums to CONTENT_W)
+	colW: [4.7, 5.7, 1.933], // Item, Purpose, Estimated cost (sums to CONTENT_W)
 	cellPt: BODY_MIN_PT,
 };
 
@@ -329,9 +330,10 @@ const PLATE_SPEC = {
 	plateHmm: 150, // plate height in the drawing (mm; the short edge)
 	outlinePt: 1.5, // outline weight of the plate
 	edgePt: 5, // weight of the two highlighted locating edges
-	padD: 0.22, // diameter of a support-pad circle
-	padInsetX: 0.28, // pad center distance from the plate's left/right edge, as a fraction of the plate width
-	padInsetY: 0.25, // pad center distance from the plate's top/bottom edge, as a fraction of the plate height
+	padDmm: 15, // support-pad diameter (mm), as on drawing SC1-05
+	// Support-pad centers (mm) from the plate center, x along the long edge, y up, as on drawing SC1-05:
+	// two near the bottom corners and one at the top middle, each 8 mm in from the board edges.
+	padsMm: [[-92, -67], [92, -67], [0, 67]],
 	legendPt: BODY_MIN_PT, // legend text
 	legendH: 0.35, // legend row height
 	legendKeyW: 0.5, // length of a legend key (a short line, or a pad circle centered in the same width)
@@ -339,7 +341,7 @@ const PLATE_SPEC = {
 };
 
 const ACCEPTANCE = {
-	listW: 7.5, // checklist column width
+	listW: 8.7, // checklist column width (wide enough that the drawing numbers SC1-01 to SC1-06 do not break at a hyphen)
 	textPt: BODY_PT,
 	iconD: BADGE_SMALL_D,
 	rowGap: GAP_TIGHT, // gap between checklist rows (seven items, some of two lines)
@@ -425,7 +427,8 @@ const RUNOUT = {
 	iconD: ICON_BADGE_D,
 	headPt: CARD_HEAD_PT,
 	textPt: BODY_MIN_PT,
-	cardPad: 0.1, // padding inside each of the four cards (tight: the longest card holds a head and three lines)
+	cardPad: 0.1, // padding inside each of the four cards
+	textRightPad: 0.45, // extra space at the right of the card text: wraps the model number DG-61003 as a whole instead of at its hyphen
 };
 
 const SPOILERS = {
@@ -930,19 +933,17 @@ async function buildDeck(contentJson, outputPptx) {
 		// Locating edges (bottom long edge and left short edge), drawn on top of the outline
 		slide.addShape(R.line, { x: px, y: py + ph, w: pw, h: 0, line: { color: C.accent1, width: t.edgePt }, objectName: "Plate bottom edge (locating)" });
 		slide.addShape(R.line, { x: px, y: py, w: 0, h: ph, line: { color: C.accent1, width: t.edgePt }, objectName: "Plate left edge (locating)" });
-		// Three support pads: two near the top corners and one near the bottom middle
-		const pads = [
-			[t.padInsetX, t.padInsetY],
-			[1 - t.padInsetX, t.padInsetY],
-			[0.5, 1 - t.padInsetY],
-		];
-		pads.forEach(([fx, fy], i) => {
-			slide.addShape(R.ellipse, { x: px + fx * pw - t.padD / 2, y: py + fy * ph - t.padD / 2, w: t.padD, h: t.padD, fill: { color: C.accent2 }, line: { type: "none" }, objectName: `Support pad ${i + 1}` });
+		// Three support pads at drawing SC1-05 positions: two near the bottom corners, one at the top middle
+		const padD = t.padDmm * t.scale; // pad diameter on the slide (in)
+		// Convert each pad center from mm about the plate center (y up) to slide inches (y down).
+		const pads = t.padsMm.map(([xmm, ymm]) => [px + pw / 2 + xmm * t.scale, py + ph / 2 - ymm * t.scale]);
+		pads.forEach(([cx, cy], i) => {
+			slide.addShape(R.ellipse, { x: cx - padD / 2, y: cy - padD / 2, w: padD, h: padD, fill: { color: C.accent2 }, line: { type: "none" }, objectName: `Support pad ${i + 1}` });
 		});
 		// Legend under the drawing: key on the left, label on the right, as one block centered in the card
 		const legend = [
 			{ label: EXTRA_LABELS.locatingEdges, key: (kx, ky) => slide.addShape(R.line, { x: kx, y: ky, w: t.legendKeyW, h: 0, line: { color: C.accent1, width: t.edgePt }, objectName: "Legend key locating edges" }) },
-			{ label: EXTRA_LABELS.supportPads, key: (kx, ky) => slide.addShape(R.ellipse, { x: kx + (t.legendKeyW - t.padD) / 2, y: ky - t.padD / 2, w: t.padD, h: t.padD, fill: { color: C.accent2 }, line: { type: "none" }, objectName: "Legend key support pads" }) },
+			{ label: EXTRA_LABELS.supportPads, key: (kx, ky) => slide.addShape(R.ellipse, { x: kx + (t.legendKeyW - t.padDmm * t.scale) / 2, y: ky - t.padDmm * t.scale / 2, w: t.padDmm * t.scale, h: t.padDmm * t.scale, fill: { color: C.accent2 }, line: { type: "none" }, objectName: "Legend key support pads" }) },
 		];
 		const ly0 = py + ph + t.legendGap;
 		legend.forEach((it, i) => {
@@ -1015,7 +1016,7 @@ async function buildDeck(contentJson, outputPptx) {
 		const rx = CONTENT_X + img.w + GAP;
 		const rw = CONTENT_X + CONTENT_W - rx;
 		const tx = rx + CARD_PAD + d.iconD + GAP_TIGHT;
-		const tw = rx + rw - CARD_PAD - tx;
+		const tw = rx + rw - CARD_PAD - d.textRightPad - tx;
 		// Card heights follow the text they hold (head line plus wrapped text), scaled together to fill the column
 		const needH = s.cards.map((c) => 2 * d.cardPad + (d.headPt * BODY_LINE_FACTOR) / 72 + textHeight(c.text, tw, d.textPt));
 		const scale = (CONTENT_H - (s.cards.length - 1) * STACK_GAP) / needH.reduce((a, b) => a + b, 0);
@@ -1105,7 +1106,9 @@ async function buildDeck(contentJson, outputPptx) {
 	builders.acceptance = (slide, s) => {
 		title(slide, s.title);
 		const a = ACCEPTANCE;
-		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: a.listW, pt: a.textPt, badgeD: a.iconD, gap: a.rowGap, fillH: CONTENT_H, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
+		// Equal rows over the full height: the longest item wraps to two lines, which a row holds
+		const rowH = (CONTENT_H - (s.checklist.length - 1) * a.rowGap) / s.checklist.length;
+		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: a.listW, pt: a.textPt, badgeD: a.iconD, gap: a.rowGap, fixedRowH: rowH, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
 		const vx = CONTENT_X + a.listW + GAP;
 		const vw = CONTENT_X + CONTENT_W - vx;
 		card(slide, "Visual card", vx, CONTENT_TOP, vw, CONTENT_H);
