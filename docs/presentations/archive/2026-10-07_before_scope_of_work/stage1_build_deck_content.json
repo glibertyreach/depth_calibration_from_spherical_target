@@ -1,0 +1,265 @@
+{
+  "slides": [
+    {
+      "id": "title",
+      "layout": "title_dark",
+      "section": "Introduction",
+      "title": "Stage-1 Calibration: Procurement and Build",
+      "subtitle": "The spheres, board and fixtures needed for the depth-sensor calibration captures",
+      "footer": "Procurement and mechanical build  ·  October 2026",
+      "notes": "This is the first of two decks on the stage-1 calibration captures. It covers what has to be bought and made before a capture session: two matte spheres, a flat board, their mountings on the robot flange, and a three-ball nest, with estimated costs and candidate suppliers. The second deck covers the test procedure itself and what the robot program must do. Both are summaries of the stage-1 capture procedure in docs/procedures, whose section 3a and appendix A hold the full build details."
+    },
+    {
+      "id": "fixtures",
+      "layout": "title_only",
+      "section": "Introduction",
+      "title": "Two spheres and a board carry the known geometry",
+      "image": "assets/fixtures_a_sphere.png",
+      "caption": "Sphere on its stem, side view: the stem points away from the sensor so that the sphere hides it.",
+      "cards": [
+        {
+          "head": "Sphere A",
+          "text": "76.2 mm diameter; used from 300 to 550 mm"
+        },
+        {
+          "head": "Sphere B",
+          "text": "152.4 mm diameter; used from 500 to 1,100 mm"
+        },
+        {
+          "head": "Board",
+          "text": "200 x 150 mm, at least 6 mm thick, flat to 0.05 mm after painting; tilted 0, 20 and 40 degrees"
+        }
+      ],
+      "notes": "The calibration compares what the sensor measures with targets of known shape held at known poses by the robot. Two sphere sizes are used because the bias from averaging over a curved surface depends on curvature; two radii a factor of two apart let the correction map carry curvature as an input and remove that bias. Both spheres are used around 500 to 550 mm so the two radii overlap. The board supplies zero curvature and controlled tilts. A sphere's orientation does not matter, only its center, which is why the mounting must hold the center fixed rather than aim the sphere precisely."
+    },
+    {
+      "id": "cost",
+      "layout": "title_only",
+      "section": "Procurement",
+      "title": "New equipment costs about $1,900 to $5,400",
+      "table": {
+        "header": [
+          "Item",
+          "Estimated cost (USD)"
+        ],
+        "rows": [
+          [
+            "Sphere A, bearing ball, bonded stem, blasted, measured",
+            "$350 to $850"
+          ],
+          [
+            "Sphere B, turned aluminum, anodized, measured",
+            "$600 to $1,800"
+          ],
+          [
+            "Stems, two",
+            "$150 to $400"
+          ],
+          [
+            "Adapter plates, two",
+            "$250 to $600"
+          ],
+          [
+            "Board, glass or ground aluminum, painted",
+            "$50 to $400"
+          ],
+          [
+            "Board adapter",
+            "$250 to $600"
+          ],
+          [
+            "Three-ball nest",
+            "$150 to $450"
+          ],
+          [
+            "Dial indicator with magnetic base",
+            "$100 to $300"
+          ]
+        ]
+      },
+      "stats": [
+        {
+          "value": "$1,900 to $5,400",
+          "label": "bearing-ball sphere A, aluminum sphere B"
+        },
+        {
+          "value": "$3,550 to $10,250",
+          "label": "both spheres made to order"
+        }
+      ],
+      "caption": "Estimates of October 2026, plus or minus 50 percent; sphere B is the least certain. The sensor, robot and capture computer are in hand.",
+      "notes": "These estimates come from suppliers' list prices where they exist and from typical job-shop rates of about 80 to 150 dollars an hour otherwise. The sphere figures include 100 to 300 dollars for having the diameter measured at a calibration laboratory. The two totals differ only in the spheres: a bearing ball with a bonded stem and a turned aluminum sphere, against both spheres made to order by a ball or ceramics maker. Quotes are needed before ordering, and the sphere choice itself is still open, pending a canvass of the market."
+    },
+    {
+      "id": "spheres",
+      "layout": "title_only",
+      "section": "Procurement",
+      "title": "Spheres must be matte and measured, not certified",
+      "columns": [
+        {
+          "head": "Finish",
+          "icon": "spray",
+          "points": [
+            "Every bearing ball arrives mirror-bright: unusable",
+            "Bead-blast with fine glass bead: removes micrometers",
+            "Matte paint is second choice: 0.02 to 0.05 mm per coat",
+            "\"Chrome steel\" is the 52100 alloy, not plating"
+          ]
+        },
+        {
+          "head": "Diameter",
+          "icon": "ruler",
+          "points": [
+            "Known to 0.025 mm, measured after the finish",
+            "Micrometer at several orientations, or a CMM",
+            "Aluminum grows 0.0035 mm per degree C: measure at session temperature",
+            "The measured value goes in the pose log"
+          ]
+        },
+        {
+          "head": "Mounting",
+          "icon": "wrench",
+          "points": [
+            "Hardened balls cannot be tapped",
+            "Steel ball: drilled or EDM blind hole, bonded stem",
+            "Aluminum sphere B: thread cut when it is turned",
+            "No pre-tapped precision sphere exists above 1.5 inch"
+          ]
+        }
+      ],
+      "notes": "A mirror finish returns one bright highlight from the sensor's projector and almost nothing else, so every sphere must be made matte. Bead-blasting is preferred because it changes the diameter by only micrometers. The diameter requirement is decision D-13: known to 0.025 mm after finishing, which is a radius error of about 0.0125 mm, an eighth of the target at 500 mm; no maker's certificate is needed. CMM means coordinate measuring machine and EDM means electrical discharge machining. Bearing-grade balls are hardened to about 60 HRC and cannot be tapped afterwards, which is why steel spheres get a bonded stem."
+    },
+    {
+      "id": "suppliers",
+      "layout": "title_only",
+      "section": "Procurement",
+      "title": "Candidate suppliers",
+      "table": {
+        "header": [
+          "Item",
+          "Candidate suppliers",
+          "Notes"
+        ],
+        "rows": [
+          [
+            "Spheres, made to order",
+            "Bal-tec; RGP Balls; Industrial Tectonics; Morgan Advanced Materials",
+            "3 and 6 inch matte spheres with a mounting hole are custom items"
+          ],
+          [
+            "Matte reference spheres, stock",
+            "MetrologyWorks; Rothbucher RSLB10M (Baseline Equipment)",
+            "MetrologyWorks up to 1.5 inch; Rothbucher 145 mm, sphericity 0.3 mm"
+          ],
+          [
+            "Board plate",
+            "McMaster-Carr MIC-6 plus a grinding shop; Edmund Optics float glass",
+            "Painted matte after grinding; flatness checked after mounting"
+          ],
+          [
+            "Nest balls",
+            "McMaster-Carr; Bal-tec",
+            "Grade-25 bearing balls"
+          ],
+          [
+            "Adapters, stems, sphere holes",
+            "Local machine shop; EDM shop for hardened balls",
+            "Hardened balls cannot be tapped"
+          ],
+          [
+            "Diameter measurement",
+            "Calibration laboratory with a coordinate measuring machine",
+            "Measure after the matte finish"
+          ]
+        ]
+      },
+      "caption": "From suppliers' web pages, October 2026; not an endorsement. Confirm size, finish, measurement and thread before ordering.",
+      "notes": "This list is appendix A of the procedure in brief. No supplier was found that stocks a precision sphere of the needed sizes with a mounting hole, so the spheres are either made to order or built from a bearing ball by a machine shop. The laser-scanner reference spheres sold in the right sizes generally have form errors of 0.5 to 2 mm, far too coarse; the Rothbucher sphere is the best specified of them. A calibration laboratory measures the finished diameters, which is cheaper than buying certified spheres and is what the calibration actually needs."
+    },
+    {
+      "id": "mounting",
+      "layout": "title_only",
+      "section": "Mechanical build",
+      "title": "A stiff, repeatable chain from flange to sphere",
+      "image": "assets/mounting_a_flange.png",
+      "caption": "Adapter on the flange's dowel, with the stem's shoulder seated on the adapter face.",
+      "points": [
+        "Adapter located by the flange dowel, so a remount lands in the same place",
+        "Ground stem, 16 mm for A and 30 mm for B, keeps sag to 0.02 to 0.05 mm",
+        "Stem length at least 2R + 50 mm, so the sphere hides the stem",
+        "Witness mark across stem and adapter shows a loosened joint",
+        "After any remount, re-check in the nest: readings within 0.1 mm"
+      ],
+      "notes": "Where the sphere center ends up does not need to be known from drawings, because the tool-center-point routine measures it; what matters is that it does not move afterwards. The adapter plate's mounting face, outer face and tapped hole are machined in one lathe setup, located on the flange pilot, so the hole is perpendicular to the face within 0.02 mm over 100 mm. The stems are deliberately thick: a 12 mm stem would let sphere A sag about 0.07 mm, and that sag would change with the robot's orientation. The shoulder on the stem, machined square in the same setup as its thread, sets the stem perpendicular to the adapter."
+    },
+    {
+      "id": "sphere_end",
+      "layout": "title_only",
+      "section": "Mechanical build",
+      "title": "The sphere end: threaded insert or bonded stem",
+      "image": "assets/mounting_b_ceramic.png",
+      "image2": "assets/mounting_c_steel.png",
+      "label": "Ceramic sphere: maker's threaded insert",
+      "label2": "Steel sphere: bonded blind hole",
+      "caption": "The hole need not be exactly radial: the tool-center-point routine measures the center wherever it ends up.",
+      "notes": "Precision ceramic spheres are sold with a threaded insert bonded in by the maker; the stem tip is turned to a matching thread with a small shoulder that seats on the flat around the insert, with a drop of medium-strength thread locker. Bearing-grade steel balls are hardened to about 60 HRC and cannot be tapped, so a shop makes a blind hole about 0.6 R deep by carbide drilling or electrical discharge machining, sized for a light press fit, and the stem is bonded in with anaerobic retaining compound. Never weld or braze: the heat distorts the sphere. A turned aluminum sphere B can have the stem thread cut into it when it is made."
+    },
+    {
+      "id": "board_build",
+      "layout": "title_only",
+      "section": "Mechanical build",
+      "title": "The board must stay flat after finishing and mounting",
+      "image": "assets/fixtures_c_board.png",
+      "caption": "Board on its adapter. The runout and frame checks shown here are done at setup (deck 2).",
+      "cards": [
+        {
+          "head": "Plate",
+          "text": "200 x 150 mm, at least 6 mm thick; ground aluminum tooling plate or float glass"
+        },
+        {
+          "head": "Finish",
+          "text": "Matte light gray paint on the front face; do not bead-blast a plate thinner than about 10 mm, it bows"
+        },
+        {
+          "head": "Flatness",
+          "text": "0.05 mm, checked after painting and mounting, not before; keep the flatness report"
+        },
+        {
+          "head": "Adapter",
+          "text": "Two dowels and a clamp hold the board square to the flange axis, centered on it, and in the same place after a remount"
+        }
+      ],
+      "notes": "Thickness is not a stiffness question: a 6 mm plate sags only about 0.002 mm under its own weight. It only has to survive the finish and the mounting flat. Bead-blasting peens one face and bows a thin plate, so paint over the ground or glass surface instead. Flatness is checked last, after painting and mounting, because that is the state the sensor sees; the flatness report is also the reference for the board-flatness check in the validation."
+    },
+    {
+      "id": "nest_build",
+      "layout": "title_only",
+      "section": "Mechanical build",
+      "title": "A three-ball nest holds each sphere at a fixed center",
+      "nest": true,
+      "points": [
+        "Three hardened balls, about 24 mm diameter, pressed into a base",
+        "Ordinary grade-25 bearing balls are good enough: the nest's quality comes from the balls being rigidly fixed",
+        "Bolted to the table where the robot reaches with the wrist down and tilted about 40 degrees to either side",
+        "Used once per sphere at setup, and after any remount of an adapter or stem"
+      ],
+      "notes": "A sphere resting on three fixed balls always has its center at the same point in space, whatever direction its stem points. That is what lets the robot's own multi-orientation routine find the sphere's center as its tool center point, which deck 2 describes. The nest is simple to make: a steel base with three pockets, the balls pressed in, and holes to bolt it down. Its position matters only in that the robot must be able to seat the sphere from several directions."
+    },
+    {
+      "id": "acceptance",
+      "layout": "title_only",
+      "section": "Mechanical build",
+      "title": "Checks before the fixtures go to the robot cell",
+      "checklist": [
+        "Adapter tapped hole square to its mounting face within 0.02 mm over 100 mm",
+        "Each stem straight: roll it on a flat surface",
+        "Both spheres matte, uniform and free of highlights",
+        "Each sphere diameter measured after finishing, with the temperature recorded",
+        "Board flat to 0.05 mm after painting and mounting",
+        "Witness marks across each stem-adapter joint",
+        "Robot payload rating covers sphere, stem and adapter together"
+      ],
+      "notes": "These are the build checks scattered through section 3a of the procedure, gathered in one place. Each one protects something the software cannot repair later: a crooked or bending stem moves the sphere center away from the measured tool center point, a shiny spot gives bad reads, and an unmeasured diameter or a bowed board puts a wrong reference into every observation."
+    }
+  ]
+}

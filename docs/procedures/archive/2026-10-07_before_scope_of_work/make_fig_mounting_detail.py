@@ -115,7 +115,7 @@ def draw_sphere_end(ax, ceramic: bool):
                 "anaerobic retaining compound; no welding or brazing", fontsize=7, ha="center", va="top")
         title = "(c) steel sphere: bonded blind hole"
     ax.plot([cx], [0.0], marker="+", color=ACCENT, markersize=12, mew=2)
-    ax.annotate("center = TCP", (cx, 0.0), (cx, SPHERE_RADIUS_MM + 6), fontsize=7, color=ACCENT,
+    ax.annotate("center = TCP (found in 3b)", (cx, 0.0), (cx, SPHERE_RADIUS_MM + 6), fontsize=7, color=ACCENT,
                 ha="center", arrowprops=dict(arrowstyle="-", color=ACCENT, lw=0.7))
     ax.set_xlim(stem_x1 - 55, cx + SPHERE_RADIUS_MM + 10)
     ax.set_ylim(-SPHERE_RADIUS_MM - 30, SPHERE_RADIUS_MM + 16)

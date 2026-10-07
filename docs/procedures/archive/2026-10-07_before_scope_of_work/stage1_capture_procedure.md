@@ -18,110 +18,41 @@ Figure 1 (`figures/fig_fixtures.png`) shows the three fixtures; figure 2 (sectio
 
 ---
 
-## 1. Scope of work and equipment
+## 1. Equipment
 
-This section is the complete list of what must exist before the first session: what is already in hand, what must be built, what must be bought, and what must be prepared. Nothing outside this list is needed. Appendix D holds the shop drawings; appendix A lists suppliers.
+| Item | Requirement | Notes | Estimated cost (USD) |
+|---|---|---|---|
+| Sensor | The depth sensor to be calibrated, rigidly mounted; it must not move during the whole session | Mount on a stiff bracket, not a tripod; mark its position so a bump is noticed | In hand |
+| Robot | Six-axis industrial robot, absolute positioning accuracy 0.1 mm or better over the working volume, with a 50 mm or larger ISO flange | A robot that has been calibrated by its maker ("absolute accuracy" option) is needed; repeatability alone is not enough | In hand |
+| Sphere A | Precision sphere, 3 inch (76.2 mm) diameter, matte, with a threaded hole or a bonded stem; diameter known to 0.025 mm, measured after the matte finish | Ceramic (zirconia or alumina) or a bearing-grade steel ball, bead-blasted matte (section 3a, item 6). The diameter is measured by micrometer at several orientations or on a coordinate measuring machine; a maker's certificate is not needed | $350 to $850 as a bearing ball with a bonded stem, bead-blasted and measured; $600 to $1,500 as a custom order from a ball maker |
+| Sphere B | Precision sphere, 6 inch (152.4 mm) diameter, matte, with the stem thread cut in or a bonded stem; diameter known to 0.025 mm, measured after the matte finish | Turned aluminum, hard-anodized (section 3a, item 5), or ceramic; the same matte appearance as sphere A. Aluminum grows 0.0035 mm in diameter per degree C, so measure it at the session's room temperature | $600 to $1,800 as a turned, hard-anodized aluminum sphere with the thread cut in, measured; $2,000 to $6,000 in custom ceramic |
+| Stems | One stem per sphere, ground steel, 16 mm diameter for sphere A and 30 mm for sphere B, length at least 2R + 50 mm from the adapter face to the sphere surface (130 mm for A, 205 mm for B), turned shoulder at the adapter end, matte black | Section 3a gives the design; a slender stem sags and moves the sphere center | $150 to $400 for both |
+| Adapter plates | One per sphere; bolts to the robot flange on its dowel pin, central tapped hole (M12 for A, M20 for B) machined square to the mounting face | Section 3a; use the dowel every time, so the adapter goes back in the same place | $250 to $600 for both |
+| Board | Flat plate 200 mm x 150 mm, at least 6 mm thick, front face matte and light gray, flat to 0.05 mm after finishing | Ground aluminum tooling plate or float glass, matte-painted; ask the supplier for a flatness report. Thickness is not a stiffness matter (a 6 mm plate sags about 0.002 mm under its own weight); it only has to survive the finish and the mounting flat. Do not bead-blast a plate thinner than about 10 mm: peening one face bows it. Paint over the ground or glass surface instead, and check the flatness after painting and mounting, not before | $50 to $150 in painted float glass; $150 to $400 in ground aluminum plate |
+| Board adapter | Plate that bolts to the flange with the dowel pins and holds the board with its front face perpendicular to the flange axis and its center on the flange axis | Three-point mounting (two dowels and a clamp) so the board goes back in the same place | $250 to $600 |
+| Three-ball nest | Three hardened balls, about 24 mm diameter, pressed into a base, bolted to the table within reach of the robot | Used once per sphere to find the tool center point (section 3b) | $150 to $450 (the balls are about $10; the rest is machining) |
+| Dial indicator with magnetic base | 0.01 mm resolution | Board runout check | $100 to $300 |
+| Capture computer | Runs the sensor's capture software, writes `.mc` files with the sensor's own name in the file name | Must have at least 10 GB free per 1,000 frames | In hand |
 
-### 1a. Already in hand
+Cost estimates (October 2026). Total for the items not already in hand: about $1,900 to $5,400 with a bearing-ball sphere A and an aluminum sphere B, or $3,550 to $10,250 with both spheres made to order by a ball or ceramics maker. The estimates come from suppliers' list prices where these exist (appendix A) and otherwise from typical United States job-shop rates of about $80 to $150 per hour; the sphere figures include $100 to $300 for measuring the diameter at a calibration laboratory. Treat them as plus or minus 50 percent and get quotes. Sphere B is the least certain figure.
 
-| Item | Requirement |
-|---|---|
-| Sensor | The depth sensor to be calibrated |
-| Robot | Six-axis industrial robot with an ISO 9409-1-50-4-M6 tool flange; its documented absolute positioning accuracy must be 0.1 mm or better over the working volume (check the maker's specification sheet; repeatability alone is not enough) |
-| Capture computer and software | Runs the sensor's capture and communication software, which also accepts the capture trigger from the robot program; writes `.mc` files; at least 10 GB free per 1,000 frames |
-| Analysis computer | Any computer with Python 3.10 or later and the calibration software installed, its self-test passed (appendix C) |
-
-### 1b. What must be built
-
-| Item | Quantity | Description | Drawing | Estimated cost (USD) |
-|---|---|---|---|---|
-| Sphere A with mounting interface | 1 | 76.2 mm matte sphere; specification in 1d; steel ball with a bonded stem, or ceramic with the maker's insert | SC1-03 (hole detail) | $250 to $550 |
-| Sphere B with mounting interface | 1 | 152.4 mm matte sphere; specification in 1d; turned aluminum with the M20 thread cut in | SC1-04 (interface detail) | $500 to $1,500 |
-| Sphere-flange mounts | 2 adapter plates, 2 stems | Doweled adapter plate on the ISO flange, shouldered ground stem; section 3a | SC1-01, SC1-02, SC1-03, SC1-04 | $400 to $1,000 |
-| Flat target (board) | 1 | 200 x 150 mm plate; specification in 1d | SC1-05 (outline) | $50 to $400 |
-| Flat-target mount (board adapter) | 1 | Plate on the ISO flange with three support pads, three edge pins and three clamp fingers; holds the board square to the flange axis and centered on it | SC1-05 | $250 to $600 |
-| Three-ball bed (nest) | 1 | Steel base with three 24 mm balls, bolted to the cell table; section 3b | SC1-06 | $150 to $450 |
-| Run-out fixture | 1 | Dial indicator on a magnetic base, standing on a steel base plate bolted to the table; section 1e | none needed | $240 to $570 |
-| Rigid sensor mount | 1 | Stiff bracket holding the sensor for the whole session, not a tripod; position marked so a bump is noticed | Existing drawing from previous work | not estimated |
-
-### 1c. What must be bought
-
-| Item | Purpose | Estimated cost (USD) |
-|---|---|---|
-| Outside micrometers, 75 to 100 mm and 150 to 175 mm (for example Mitutoyo 103-140-10 and 103-143-10), with their setting standards | Sphere diameters, measured in-house after the matte finish; the setting standards check the micrometers before use | $405 to $520 |
-| Calipers with depth rod, 150 mm | Rough TCP length; board distance D | $30 to $150 |
-| Precision straightedge, 300 mm (DIN 874 grade 0 or better), and feeler gauges | Board flatness after painting and mounting (a 0.05 mm leaf must not pass under the edge); stem straightness | $75 to $240 |
-| Thermometer | Room temperature at sphere measurement and during the session | $15 to $40 |
-| Machinist's square | Board x axis against the adapter | $30 to $80 |
-| Torque wrench | Recorded stem and adapter torques | $80 to $250 |
-| Consumables | Medium-strength thread locker, anaerobic retaining compound, shim stock, isopropyl alcohol and wipes, padded cases for the spheres | $50 to $150 |
-| Phone camera | Setup photos for the deliverables (section 10) | in hand |
-
-Cost estimates (October 2026): building $1,840 to $5,070, buying $685 to $1,430, total $2,525 to $6,500 with a bearing-ball sphere A and an aluminum sphere B, or $4,375 to $11,950 with both spheres made to order by a ball or ceramics maker. They come from suppliers' list prices where these exist (appendix A) and otherwise from typical United States job-shop rates of about $80 to $150 per hour. Treat them as plus or minus 50 percent and get quotes. Sphere B is the least certain figure.
-
-### 1d. Purchase specifications for the spheres and the flat plate
-
-| Requirement | Sphere A | Sphere B |
-|---|---|---|
-| Nominal diameter | 76.2 mm (3 inch) | 152.4 mm (6 inch) |
-| Diameter | Known to 0.025 mm, measured in-house by outside micrometer at no fewer than six orientations after the matte finish; the mean goes in the pose log | Same; aluminum grows 0.0035 mm in diameter per degree C, so measure at the session's room temperature and record it |
-| Sphericity | 0.02 mm or better (the spread of the micrometer readings must not exceed it) | 0.02 mm or better |
-| Material | Bearing-grade steel ball (52100 or 440C, grade 25 or better) or ceramic (zirconia or alumina) | Turned aluminum (6061-T6 or similar), solid or hollow with at least 6 mm wall; ceramic as an alternative |
-| Surface | Matte, light, uniform, free of highlights: fine glass-bead blast (preferred) or thin matte light-gray paint | Matte hard anodize, light gray or natural; same appearance as sphere A |
-| Mounting interface | Steel: blind hole 10 H7 x 23 mm along any radius, stem bonded (drawing SC1-03). Ceramic: maker's M8 insert | M20 x 30 mm blind tapped hole at a pole with a 32 mm spot face, cut when the sphere is turned (drawing SC1-04) |
-| Approximate mass | 0.9 kg (ceramic) to 1.8 kg (steel) | about 5 kg solid aluminum |
-
-| Requirement | Flat plate (board) |
-|---|---|
-| Size | 200 x 150 mm, at least 6 mm thick |
-| Material | Ground aluminum tooling plate (for example MIC-6, finish-ground) or float glass |
-| Flatness | 0.05 mm over the front face, checked with the straightedge and a 0.05 mm feeler leaf after painting and after mounting on the board adapter |
-| Front face | Matte light-gray paint, thin and even; do not bead-blast a plate thinner than about 10 mm, since peening one face bows it |
-| Edges | Square and clean on the bottom long edge and the left short edge, which rest against the board adapter's edge pins |
-| Documents | Supplier's flatness report, kept with the session notes |
-
-### 1e. Run-out fixture: dial indicator and its mounting
-
-The run-out check of section 4 needs the dial indicator held still while the robot turns the board. Use a dial indicator with 0.01 mm graduation and about 10 mm travel (for example Mitutoyo 2046 series, about $50 to $150) on an articulating magnetic base with fine adjustment (for example Noga MG71003 or DG-61003, about $140 to $320). Stand the magnetic base on a steel base plate about 150 x 100 x 12 mm bolted to the cell table with two M8 screws, so the base holds on a non-magnetic table and does not creep. Place the plate where the indicator tip reaches the board's front face about 20 mm from an edge with the robot in its run-out pose. McMaster-Carr and the usual tool suppliers stock all three items.
-
-### 1f. Preparation before the first session
-
-Robot:
-
-- Check the robot's documented absolute-accuracy specification: 0.1 mm or better over the working volume.
-- Weigh each fixture (sphere A with stem and adapter, sphere B with stem and adapter, board with its adapter) and enter its tool load data (mass and center of gravity) in the controller; wrong load data shifts every pose.
-- Write the robot program to the interface in section 6: it reads `poses.csv`, triggers captures through the capture computer's communication software, and writes `pose_log.csv`. Note where the program writes `pose_log.csv` (controller storage or a network location) so it can be collected after the session. Once the robot model and controller are settled, the program can be written with Claude Code.
-- Dry-run every planned pose at reduced speed, without capturing, to confirm each is reachable and clears the sensor, its mount and its cables.
-- Review the new program under the cell's safety rules.
-
-Sensor and computers:
-
-- Set up the capture software for the robot's trigger and the `<pose_id>_IndexNN` file names (writing the robot pose into the header is optional, section 7).
-- Choose and record the production exposure and gain, and the SGM parameters: all smoothing filters off, and the patch size the same as in installations.
-- Free at least 10 GB per 1,000 frames on the capture computer (a session is about 930 frames).
-- Install the calibration software on the analysis computer and pass its self-test (appendix C).
-
-Cell:
-
-- Layout study: place the sensor so that the 300 to 1,100 mm volume lies inside the robot's reach at the orientations the plan needs; do this before the sensor mount is fixed.
-- Drill and tap the cell table for the nest (four M8) and the run-out base plate (two M8).
-- Identify and record the robot base frame used for the session.
+Appendix A lists suppliers for the spheres and the board; appendix B says where the software named in sections 5 to 8 is and how to install it.
 
 No two-sphere ball bar is used; section 9 describes the checks that take its place.
 
 ## 2. Before anything else
 
 1. Switch the sensor on and leave it running for at least 30 minutes before the first capture, and leave it running for the whole session. Note the time it was switched on.
-2. Fix the sensor's exposure and gain to the values that will be used in production, and set the SGM (semi-global matching) parameters: all smoothing filters off, and the patch size the same as in installations. Write all of them down. Do not use automatic exposure.
-3. Keep direct sunlight off the targets. The lab's normal, constant room light is fine; no other lighting control is needed.
+2. Fix the sensor's exposure and gain to the values that will be used in production. Write them down. Do not use automatic exposure.
+3. Switch off or block any sunlight or lamps that fall on the targets. Room light is fine if it is constant.
 4. Confirm with the engineer what the robot base frame is (which frame the robot's position readout is in). Every pose in this procedure is recorded in that frame. Do not change the active base frame during the session.
-5. Record in a text file (`session_notes.txt`): date, sensor serial number, exposure, gain and SGM parameters, robot model and controller software version, the active base frame name, the measured sphere diameters with the room temperature at measurement, the board's flatness report, room temperature, and anything unusual.
+5. Record in a text file (`session_notes.txt`): date, sensor serial number, exposure and gain, robot model and controller software version, the active base frame name, the measured sphere diameters with the room temperature at measurement, the board's flatness report, room temperature, and anything unusual.
 
 ## 3. Mounting the spheres and finding their tool center points
 
 ### 3a. Suggested mounting: flange, adapter, stem, sphere
 
-Figure 1a shows the arrangement and figure 3 the joint details; the dimensioned shop drawings SC1-01 to SC1-04 in appendix D are the ones to build from. The goal is a
+Figure 1a shows the arrangement and figure 3 the joint details. The goal is a
 stiff, repeatable chain from the robot flange to the sphere center; where the
 center ends up does not need to be known from drawings, because the tool
 center point routine (3b) measures it, but it must not move afterwards.
@@ -130,12 +61,12 @@ center point routine (3b) measures it, but it must not move afterwards.
 
 Figure 3. Section through the sphere mounting: adapter plate on the flange's dowel and bolts, stem with a turned shoulder seated on the adapter face, and the sphere end either threaded into the sphere's insert (ceramic spheres) or bonded into a reamed blind hole (steel spheres).
 
-1. Adapter plate (drawings SC1-01 and SC1-02). One plate per sphere, steel or aluminum, 63 mm diameter, 16 mm thick for sphere A and 22 mm for sphere B, with a 31.5 mm centering spigot 5 mm high that fits the flange's centering recess (ISO 9409-1-50-4-M6: four M6 on a 50 mm circle, one 6 mm locating pin hole on that circle, 31.5 mm H7 recess). One 6 mm dowel pin pressed into the plate engages the flange's pin hole; four counterbored holes take M6 x 16 low-head screws. The central thread for the stem is M12 for sphere A and M20 for sphere B. Have the faces, the spigot and the thread machined in one setup, so the thread is perpendicular to the stem-side face within 0.02 mm over 100 mm. Always mount the plate on its dowel; the dowel is what makes a remount land in the same place.
-2. Stem. Ground steel rod (drill rod or silver steel): 16 mm diameter for sphere A, 30 mm for sphere B. These are thicker than the earlier rule of thumb on purpose: the sphere's weight at the end of a slender stem sags by about 0.07 mm on a 12 mm stem for sphere A and 0.1 mm on a 25 mm stem for sphere B, which would change with the robot's orientation; at 16 and 30 mm the sag is 0.02 to 0.05 mm. Length from the adapter face to the sphere surface at least 2R plus 50 mm (130 mm for A, 205 mm for B; drawings SC1-03 and SC1-04). At the adapter end turn a threaded spigot (M12 x 15 mm, M20 x 25 mm) behind a shoulder at least 1.5 times the stem diameter across; the shoulder face, machined square to the stem axis in the same setup as the thread, seats on the adapter and sets the stem perpendicular. Tighten to a moderate, recorded torque; a jam nut is optional. Make a witness mark across stem and adapter so a loosened joint is visible. Finish the stem matte black (bluing or matte paint).
+1. Adapter plate. One plate per sphere, steel or aluminum, 12 mm thick, drilled to the robot's flange pattern (for a 50 mm ISO 9409-1 flange: four M6 on a 50 mm circle and one 6 mm dowel) with a central tapped hole for the stem: M12 for sphere A, M20 for sphere B. Have the plate's mounting face, its outer face and the tapped hole machined in one lathe setup, located on the flange pilot diameter, so the hole is perpendicular to the mounting face within 0.02 mm over 100 mm. Always mount it on the dowel; the dowel is what makes a remount land in the same place.
+2. Stem. Ground steel rod (drill rod or silver steel): 16 mm diameter for sphere A, 30 mm for sphere B. These are thicker than the earlier rule of thumb on purpose: the sphere's weight at the end of a slender stem sags by about 0.07 mm on a 12 mm stem for sphere A and 0.1 mm on a 25 mm stem for sphere B, which would change with the robot's orientation; at 16 and 30 mm the sag is 0.02 to 0.05 mm. Length from the adapter face to the sphere surface at least 2R plus 50 mm (130 mm for A, 205 mm for B). At the adapter end turn a threaded spigot (M12 x 15 mm, M20 x 25 mm) behind a shoulder at least 1.5 times the stem diameter across; the shoulder face, machined square to the stem axis in the same setup as the thread, seats on the adapter and sets the stem perpendicular. Tighten to a moderate, recorded torque; a jam nut is optional. Make a witness mark across stem and adapter so a loosened joint is visible. Finish the stem matte black (bluing or matte paint).
 3. Sphere end, ceramic spheres (preferred). Precision ceramic spheres are sold with a threaded insert (typically M6 or M8) bonded in by the maker. Turn the stem tip to a matching threaded spigot with a small shoulder that seats on the flat around the insert; add a drop of medium-strength thread locker and tighten by hand plus a quarter turn. Do not clamp the sphere in a vise; hold the stem.
-4. Sphere end, steel spheres. Bearing-grade balls (52100 "chrome steel" or 440C stainless) are through-hardened to about 60 HRC, so they cannot be tapped with ordinary tooling, and no supplier found stocks a tapped precision ball above 1.5 inch (appendix A). Do not ask a shop to tap one. Instead have a blind hole made along any radius to about 0.6 R deep (10 mm H7 x 23 mm for sphere A, drawing SC1-03) by carbide drilling or electrical discharge machining, sized for a light press fit on the stem tip (H7/p6), and bond the stem in with an anaerobic retaining compound (for example a high-strength bearing retainer). Do not weld or braze; the heat distorts the sphere. The hole does not have to be exactly radial, since the routine of 3b measures the center wherever it ends up. A tapped hole is possible only as a custom order from a ball maker, who taps before hardening.
-5. Weight. Sphere A in ceramic weighs about 0.9 kg, in steel 1.8 kg. Sphere B in steel weighs 14.5 kg and is not recommended; in alumina ceramic about 7 kg; a precision-turned aluminum sphere with a matte hard-anodized surface weighs about 5 kg and is the practical choice. Have the shop that turns it cut the M20 thread for the stem into the sphere in the same setup, as a blind tapped hole M20 x 30 mm with a 32 mm spot face at the pole (drawing SC1-04); the sphere then arrives tapped by construction and the stem design of item 2 is used unchanged. Specify sphericity 0.02 mm or better (the same as for sphere A, section 1d) and measure the diameter and roundness in-house after hard anodizing, which adds about 0.025 to 0.05 mm to the radius. The diameter must be known to 0.025 mm; aluminum grows 0.0035 mm in diameter per degree C at this size, so measure at the session's room temperature or record the temperature and correct. A hollow sphere (two spun hemispheres welded and finish-turned) is lighter still, but its wall must be thick enough to turn true; 6 mm is a reasonable minimum. Check the robot's payload rating against the sphere, stem and adapter together.
-6. Finish. A matte, light, uniform surface on both spheres, the same finish on both. Every bearing-grade ball, steel or ceramic, is delivered lapped to a mirror finish, and a mirror sphere is unusable (it returns one bright highlight from the sensor's projector and little else). Note that "chrome steel" is the trade name of the 52100 alloy, about 1.5 percent chromium; it is not chrome-plated, but it is just as bright as delivered. The preferred treatment is bead-blasting with fine glass bead, which turns the surface a diffuse gray and removes only micrometers, so the certified diameter stays usable within about 0.01 mm; this is how commercial matte reference spheres are made. A thin matte gray paint is the second choice, since each coat adds 0.02 to 0.05 mm. In either case measure the diameter afterwards in-house with the outside micrometer, checked first against its setting standard, at no fewer than six orientations; the spread of the readings is the sphericity check (0.02 mm or better), and their mean, not any certificate, goes in the pose log.
+4. Sphere end, steel spheres. Bearing-grade balls (52100 "chrome steel" or 440C stainless) are through-hardened to about 60 HRC, so they cannot be tapped with ordinary tooling, and no supplier found stocks a tapped precision ball above 1.5 inch (appendix A). Do not ask a shop to tap one. Instead have a blind hole made along any radius to about 0.6 R deep by carbide drilling or electrical discharge machining, sized for a light press fit on the stem tip (H7/p6), and bond the stem in with an anaerobic retaining compound (for example a high-strength bearing retainer). Do not weld or braze; the heat distorts the sphere. The hole does not have to be exactly radial, since the routine of 3b measures the center wherever it ends up. A tapped hole is possible only as a custom order from a ball maker, who taps before hardening.
+5. Weight. Sphere A in ceramic weighs about 0.9 kg, in steel 1.8 kg. Sphere B in steel weighs 14.5 kg and is not recommended; in alumina ceramic about 7 kg; a precision-turned aluminum sphere with a matte hard-anodized surface weighs about 5 kg and is the practical choice. Have the shop that turns it cut the M20 thread for the stem into the sphere in the same setup, as a blind tapped hole or a short tapped boss at the pole; the sphere then arrives tapped by construction and the stem design of item 2 is used unchanged. Specify sphericity 0.02 mm or better and ask for the measured diameter and roundness after hard anodizing, which adds about 0.025 to 0.05 mm to the radius. The diameter must be known to 0.025 mm; aluminum grows 0.0035 mm in diameter per degree C at this size, so measure at the session's room temperature or record the temperature and correct. A hollow sphere (two spun hemispheres welded and finish-turned) is lighter still, but its wall must be thick enough to turn true; 6 mm is a reasonable minimum. Check the robot's payload rating against the sphere, stem and adapter together.
+6. Finish. A matte, light, uniform surface on both spheres, the same finish on both. Every bearing-grade ball, steel or ceramic, is delivered lapped to a mirror finish, and a mirror sphere is unusable (it returns one bright highlight from the sensor's projector and little else). Note that "chrome steel" is the trade name of the 52100 alloy, about 1.5 percent chromium; it is not chrome-plated, but it is just as bright as delivered. The preferred treatment is bead-blasting with fine glass bead, which turns the surface a diffuse gray and removes only micrometers, so the certified diameter stays usable within about 0.01 mm; this is how commercial matte reference spheres are made. A thin matte gray paint is the second choice, since each coat adds 0.02 to 0.05 mm. In either case re-measure the diameter afterwards (micrometer at several orientations, or a coordinate measuring machine) and put the measured value, not the certificate, in the pose log.
 7. Handling. Keep each sphere in a padded case with its stem fitted. Never set a sphere down on its surface on a hard table. Wipe with isopropyl alcohol before a session.
 8. Repeatability. After any remount of the adapter or stem, re-run the nest check (3b, step 8) before capturing. The joint is good if the two readings agree within 0.1 mm.
 
@@ -146,8 +77,8 @@ The calibration needs to know where the center of the sphere is for every robot 
 Why the nest works: a sphere resting on three fixed balls always has its center at the same point in space, whatever direction its stem points. The robot's built-in multi-orientation TCP routine ("4-point method", "TCP by touch-up", or similar name depending on the robot brand) finds the one point on the tool that stays still while the wrist turns. Seating the sphere in the nest from several directions makes that point the sphere's center.
 
 1. Bolt the nest to the table at a height the robot reaches comfortably with the wrist pointing down and tilted about 40 degrees to either side.
-2. Mount sphere A's adapter and stem on the flange on its dowel pin. Tighten to the normal torque.
-3. Enter a rough TCP first so the robot moves sensibly: the TCP is on the flange axis at a distance from the flange face equal to adapter thickness plus stem length plus the sphere radius. Measure these with calipers and enter the sum as the tool z offset, x and y zero. Also enter the tool's load data: the weighed mass of sphere, stem and adapter together, with its center of gravity on the flange axis near the sphere center.
+2. Mount sphere A's adapter and stem on the flange with the dowel pins. Tighten to the normal torque.
+3. Enter a rough TCP first so the robot moves sensibly: the TCP is on the flange axis at a distance from the flange face equal to adapter thickness plus stem length plus the sphere radius. Measure these with calipers and enter the sum as the tool z offset, x and y zero.
 4. Start the robot's multi-orientation TCP routine. For each of its points (use at least six if the controller allows more than four): jog the robot so that the sphere settles into the nest, touching all three balls, with the stem in a different direction each time: straight up, tilted 40 degrees forward, backward, left, right, and one twisted about the stem. Settle the sphere by lowering it slowly the last millimeter; do not press down hard, the stem will bend. Confirm the point.
 5. The routine reports a TCP and usually an error figure. Accept it only if the error is 0.1 mm or less. If it is larger, repeat; the usual causes are the sphere not fully seated, or a loose adapter.
 6. Save the TCP under a clear name, for example `TCP_SPHERE_A_76mm`. Write the numbers in the session notes.
@@ -158,12 +89,12 @@ Why the nest works: a sphere resting on three fixed balls always has its center 
 
 The board's "tool frame" is a coordinate frame at the center of the board's front face, with its z axis pointing straight out of the face (toward the sensor when the board faces it), x along the long edge, y along the short edge. The robot must report the board's pose in this frame.
 
-1. Mount the board adapter (drawing SC1-05) on the flange on its dowel pin. Seat the board on the three support pads against the three edge pins and tighten the three clamp fingers.
+1. Mount the board adapter and the board on the flange with the dowel pins.
 2. Runout check (figure 1c): fix the dial indicator to the table with its tip on the board's front face about 20 mm from an edge. Slowly rotate the flange about its own axis (robot joint 6) through 360 degrees. The reading must stay within 0.05 mm. If it does not, the board face is not perpendicular to the flange axis: shim the adapter and repeat.
 3. Measure the distance from the flange face to the board's front face with a depth gauge or calipers at four places around the board; they should agree within 0.05 mm. Record the average as D.
 4. Measure the board's width and height with calipers and record them. The half-sizes go in the manifest (100 and 75 mm for the recommended board).
 5. Define the tool frame in the robot: position (0, 0, D) from the flange, orientation: z along the flange axis pointing out of the board, x along the board's long edge. How to set x: with the robot's "tool orientation by points" function, teach a point at the center of the long edge, or enter the rotation about z that aligns x with the long edge, after measuring with a square against the adapter. An error of a few degrees in x is harmless (the board is symmetric); an error in z is not.
-6. Save as `TOOL_BOARD`, enter its load data (weighed mass of board and adapter, center of gravity on the flange axis), and write the numbers in the session notes.
+6. Save as `TOOL_BOARD` and write the numbers in the session notes.
 
 ## 5. Finding where the sensor is (rough)
 
@@ -213,13 +144,11 @@ Figure 2. The planned sphere centers and board centers for the settings above, i
 
 Every row of `poses.csv` gives: `pose_id`, `kind` (sphere or board), the target size, the position of the TCP in the base frame (`base_x_mm`, `base_y_mm`, `base_z_mm`), and the tool orientation three ways (rotation matrix `r00..r22`, quaternion `quat_w..quat_z`, rotation vector `rotvec_x_deg..`); use whichever your robot program accepts. For spheres the orientation points the stem away from the sensor so that the sphere hides it; for boards it is the board frame orientation, tilt included. Hand the file to whoever writes the robot program, or import it directly if the controller can read CSV.
 
-The robot program is written before the first session (section 1f), once the robot model and controller are settled; it can be written with Claude Code, because both sides of its interface are fixed: `poses.csv` coming in, and the capture trigger and `pose_log.csv` going out. The capture trigger goes through the capture computer's communication software, whose interface the program uses. Before the first session, dry-run every pose at reduced speed without capturing, to confirm reach and clearance from the sensor, its mount and its cables.
-
 Robot program outline, for each row of the file:
 
 1. Move to the pose (joint move to a point 100 mm short of it along the stem axis, then a linear move onto it, so the approach is the same every time).
 2. Wait 1.5 seconds for vibration to settle.
-3. Trigger the capture of 5 frames through the communication software; file names `<pose_id>_Index00.mc` to `<pose_id>_Index04.mc`.
+3. Trigger the capture of 5 frames; file names `<pose_id>_Index00.mc` to `<pose_id>_Index04.mc`.
 4. Read the robot's actual reported TCP pose (not the commanded one, the reported one) and append it to the pose log (section 7).
 5. Move on.
 
@@ -231,9 +160,7 @@ The capture software writes the sensor data. The pose must be recorded separatel
 
 Option A, pose in the file header. If the capture software can be given the robot's pose at capture time, it writes it into the file's header under the key `robotPose` as a 4 x 4 matrix (16 numbers, row by row: rotation in the top-left 3 x 3, position in the right column, last row 0 0 0 1), tool frame to base frame. Then no separate log is needed beyond the target sizes, and the software reads the poses from the files.
 
-Option B, pose log plus manifest (preferred when option A is not available, and recommended anyway as a backup). The robot program appends one line per pose to a CSV file, the pose log, with the columns below. Note in the session notes where the program writes it (controller storage or a network location), so it can be collected after the session.
-
-Columns:
+Option B, pose log plus manifest (preferred when option A is not available, and recommended anyway as a backup). The robot program appends one line per pose to a CSV file, the pose log, with these columns:
 
 ```
 pose_id, kind, radius_mm, half_width_mm, half_height_mm, x_mm, y_mm, z_mm, rotation_type, r1, r2, r3, r4
@@ -299,8 +226,8 @@ What these checks cannot do is what the ball bar did best: test the scale of the
 - [ ] `captures/check.json` with no flags, or a note explaining each remaining flag
 - [ ] `plan/poses.csv`, `plan/plan_summary.txt`, `plan/plan.png` as used
 - [ ] `boot.json` and the bootstrap captures
-- [ ] `session_notes.txt` with: sensor serial, warm-up time, exposure, gain and SGM parameters, where `pose_log.csv` was written, base frame name, TCP values and their routine errors, board D and runout reading, board dimensions, sphere diameter measurements, temperature, fixture changes with times
-- [ ] Photos of the setup (a phone camera is fine): sensor mount, each fixture on the flange, the nest, the run-out fixture
+- [ ] `session_notes.txt` with: sensor serial, warm-up time, exposure and gain, base frame name, TCP values and their routine errors, board D and runout reading, board dimensions, sphere diameter measurements, temperature, fixture changes with times
+- [ ] Photos of the setup: sensor mount, each fixture on the flange, the nest
 
 ## 11. Things that spoil a session
 
@@ -314,7 +241,7 @@ What these checks cannot do is what the ball bar did best: test the scale of the
 
 ---
 
-## Appendix A. Suppliers
+## Appendix A. Suppliers for the spheres and the board
 
 This list was assembled from the suppliers' web pages in October 2026. It is a starting point, not an endorsement: confirm the diameter, the finish, how the diameter is measured, and the mounting thread with the supplier before ordering, because catalogs change and several of the items below are made to order. The sizes this procedure asks for (3 inch and 6 inch matte spheres with a threaded hole) are not stock items at most metrology suppliers, whose standard reference spheres are either small (up to about 50 mm, for probing machines) or large but magnet-based (145 to 200 mm, for laser scanners).
 
@@ -332,7 +259,7 @@ Spheres, stock items, useful for a smaller sphere A or the three-ball nest:
 - Hexagon Manufacturing Intelligence: ceramic calibration spheres, 15 to 25 mm, M8 thread, with an ISO/IEC 17025 certificate. Suitable for the nest balls; too small for the targets.
 - Renishaw: datum spheres in polished tungsten carbide, 12 to 25 mm. The polished finish is unsuitable for the targets (bright highlight, bad reads); fine for the nest.
 - Laser-scanner target spheres (Laserscanning Europe and Goecke in Germany, Scan & Go in Italy, Tiger Supplies and Mount Laser in the United States): 100, 145, 150 and 200 mm spheres in coated aluminum, stainless steel, carbon fiber or plastic, matte, on a magnetic base with a female M8 or 1/4 inch insert, about $100 to $150 per sphere in sets of six. Where a form figure is stated it is 0.5 to 2 mm, fifty to two hundred times too coarse for either target. Not usable as specified.
-- Rothbucher Systeme (Germany) RSLB10M, sold in the United States by Baseline Equipment Company and others, about $150 to $200: 145 mm plastic sphere with a matte textured lacquer, sphericity 0.3 mm and radius within 0.15 mm at 20 degrees C, 250 g, magnetic base. This is the best-specified laser-scanner sphere found and is light enough for a slender stem, but its form error is still three times the 0.1 mm target at 500 mm. It could serve as a provisional far-range sphere B (700 mm and beyond, where the depth-scaled target is 0.2 to 0.4 mm) during stage 1 if its diameter is first measured in-house with an outside micrometer (a 125 to 150 mm one, since 145 mm is below the range of the 150 to 175 mm micrometer of section 1c) and that value goes in the pose log, and if the far-range hold-out residuals are read with its 0.3 mm form error in mind. It is not adequate as sphere A or as the final sphere B. Remove the magnetic base and bond a stem into the insert (section 3a).
+- Rothbucher Systeme (Germany) RSLB10M, sold in the United States by Baseline Equipment Company and others, about $150 to $200: 145 mm plastic sphere with a matte textured lacquer, sphericity 0.3 mm and radius within 0.15 mm at 20 degrees C, 250 g, magnetic base. This is the best-specified laser-scanner sphere found and is light enough for a slender stem, but its form error is still three times the 0.1 mm target at 500 mm. It could serve as a provisional far-range sphere B (700 mm and beyond, where the depth-scaled target is 0.2 to 0.4 mm) during stage 1 if its radius is first measured on a coordinate measuring machine and that value goes in the pose log, and if the far-range hold-out residuals are read with its 0.3 mm form error in mind. It is not adequate as sphere A or as the final sphere B. Remove the magnetic base and bond a stem into the insert (section 3a).
 
 A low-cost alternative for sphere A is a bearing-grade ball (grade 25 or better; 52100 alloy steel, sold as "chrome steel" although it is not plated, or 440C stainless) from Bal-tec or an industrial supplier, about $30 to $60 at 3 inch; a shop puts in the blind hole by carbide drilling or electrical discharge machining and bonds the stem (it cannot be tapped, section 3a item 4), then bead-blasts it matte. Bead-blasting keeps the certified diameter within about 0.01 mm; if paint is used instead, each coat adds 0.02 to 0.05 mm. Either way the diameter is measured afterwards, with a micrometer at several orientations, and that value, not the ball's certificate, goes in the pose log. Weight is the other constraint: a solid 6 inch steel ball weighs about 14.5 kg and is not recommended on a stem; alumina is about half that, and a hollow or aluminum sphere lighter again (section 3a).
 
@@ -343,15 +270,6 @@ Board:
 - A small granite surface plate (Starrett or Mitutoyo, grade A or AA) is flat to a few micrometers but black and heavy; it works if the front is painted matte light gray and the robot carries the weight (a 200 x 150 x 50 mm plate is about 4 kg).
 
 For the three-ball nest, the hardened balls can be ordinary grade-25 bearing balls (McMaster-Carr, Bal-tec); the nest's quality comes from the balls being rigidly fixed, not from their grade.
-
-Measuring instruments (section 1c), all stocked by McMaster-Carr, Transcat, MSI-Viking and the usual tool suppliers:
-
-- Outside micrometers: Mitutoyo 103-140-10 (75 to 100 mm, about $170 to $220) and 103-143-10 (150 to 175 mm, about $235 to $300), each supplied with its setting standard; Starrett makes equivalents.
-- Dial indicator: Mitutoyo 2046 series, 0.01 mm graduation, 10 mm travel, about $50 to $150.
-- Magnetic base: Noga MG71003 or DG-61003 with fine adjustment, about $140 to $320.
-- Straightedge: 300 mm, DIN 874 grade 0 or better, about $60 to $200; feeler gauge set with a 0.05 mm leaf.
-
-Machine shop: the adapter plates, stems, board adapter, nest base and run-out base plate (drawings in appendix D), and the blind hole in a steel sphere (carbide drilling or electrical discharge machining).
 
 ## Appendix B. Software reference: where the capture tools are in the repository
 
