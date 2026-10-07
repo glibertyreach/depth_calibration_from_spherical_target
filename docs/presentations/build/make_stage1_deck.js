@@ -262,7 +262,7 @@ const BOARD_BUILD = {
 	iconD: ICON_BADGE_D,
 	headPt: CARD_HEAD_PT,
 	textPt: BODY_MIN_PT,
-	cardPad: GAP_TIGHT, // padding inside each of the four cards (tighter than CARD_PAD so four cards fit)
+	cardPad: 0.1, // padding inside each of the four cards (tighter than CARD_PAD so four cards fit)
 };
 
 // Three-ball nest diagram (native shapes). Dimensions in inches, true to scale with each other:
@@ -342,6 +342,7 @@ const ACCEPTANCE = {
 	listW: 7.5, // checklist column width
 	textPt: BODY_PT,
 	iconD: BADGE_SMALL_D,
+	rowGap: GAP_TIGHT, // gap between checklist rows (seven items, some of two lines)
 	badgeD: 2.6, // large clipboard-check circle on the right
 };
 
@@ -424,7 +425,7 @@ const RUNOUT = {
 	iconD: ICON_BADGE_D,
 	headPt: CARD_HEAD_PT,
 	textPt: BODY_MIN_PT,
-	cardPad: GAP_TIGHT, // padding inside each of the four cards
+	cardPad: 0.1, // padding inside each of the four cards (tight: the longest card holds a head and three lines)
 };
 
 const SPOILERS = {
@@ -439,6 +440,7 @@ const DELIVERABLES = {
 	listW: 7.5, // checklist column width
 	textPt: BODY_PT,
 	iconD: BADGE_SMALL_D,
+	rowGap: GAP_TIGHT, // gap between checklist rows (seven items, one of three lines)
 	headPt: HEAD_PT,
 	softwareIconD: ICON_BADGE_D,
 	bulletPt: BODY_PT,
@@ -696,11 +698,14 @@ async function buildDeck(contentJson, outputPptx) {
 		const pad = o.cardKind ? o.cardPad : 0;
 		const textX = o.x + pad + o.badgeD + GAP_TIGHT;
 		const textW = o.w - pad * 2 - o.badgeD - GAP_TIGHT;
+		const rowGap = o.gap === undefined ? GAP_TIGHT : o.gap;
+		const needH = items.map((item) => Math.max(o.badgeD, textHeight(typeof item === "string" ? item : item.text, textW, o.pt)) + pad * 2);
+		// fillH: rows are as tall as their text needs, and share what is left of fillH equally, so the list fills the height
+		const extra = o.fillH === undefined ? 0 : (o.fillH - (items.length - 1) * rowGap - needH.reduce((a, b) => a + b, 0)) / items.length;
+		if (extra < 0) console.warn(`WARNING: ${name} needs more than ${o.fillH.toFixed(2)} in`);
 		items.forEach((item, i) => {
 			const str = typeof item === "string" ? item : item.text;
-			const textH = textHeight(str, textW, o.pt);
-			const inner = Math.max(o.badgeD, textH);
-			const rowH = o.fixedRowH || Math.max(o.minRowH || 0, inner + pad * 2); // fixedRowH: equal rows, text is known to fit
+			const rowH = o.fixedRowH || Math.max(o.minRowH || 0, needH[i] + Math.max(0, extra)); // fixedRowH: equal rows, text is known to fit
 			if (o.cardKind) card(slide, `${name} row ${i + 1} card`, o.x, y, o.w, rowH, o.cardKind);
 			const by = y + (rowH - o.badgeD) / 2;
 			const b = o.badge(i, item);
@@ -708,9 +713,9 @@ async function buildDeck(contentJson, outputPptx) {
 			else if (b.kind === "icon") iconBadge(slide, `${name} icon ${i + 1}`, b.icon, o.x + pad, by, o.badgeD, b.fill);
 			else slide.addImage({ data: b.data, x: o.x + pad, y: by, w: o.badgeD, h: o.badgeD, altText: "check icon", objectName: `${name} check ${i + 1}` });
 			text(slide, `${name} text ${i + 1}`, str, textX, y, textW, rowH, { fontSize: o.pt, color: o.textColor || C.text1, valign: "middle" });
-			y += rowH + (o.gap === undefined ? GAP_TIGHT : o.gap);
+			y += rowH + rowGap;
 		});
-		return y - (o.gap === undefined ? GAP_TIGHT : o.gap);
+		return y - rowGap;
 	}
 
 	/** Height of a caption of the given width: one line or two, by the text-width model. */
@@ -742,13 +747,18 @@ async function buildDeck(contentJson, outputPptx) {
 			const base = { fill: { color: i % 2 === 0 ? C.background1 : C.background2 }, valign: "middle", fontSize: o.cellPt, margin: TABLE_CELL_MARGIN };
 			rows.push(r.map((cellText, ci) => ({ text: glue(cellText), options: Object.assign({ align: o.colAlign[ci], bold: o.colBold[ci], color: o.colColor[ci] || C.text1 }, base) })));
 		});
-		const evenH = (o.h - TABLE_HEAD_H) / s.table.rows.length;
-		const rowHs = s.table.rows.map((r) => {
+		const bodyH = o.h - TABLE_HEAD_H;
+		const needHs = s.table.rows.map((r) => {
 			const lines = Math.max(...r.map((cellText, ci) => countLines(glue(cellText), o.colW[ci] - mLeft - mRight, o.cellPt, o.colBold[ci])));
-			return Math.max(evenH, (lines * o.cellPt * TABLE_ROW_LINE_FACTOR) / 72 + mTop + mBottom);
+			return (lines * o.cellPt * TABLE_ROW_LINE_FACTOR) / 72 + mTop + mBottom;
 		});
+		// Rows are equally tall; a row whose text needs more than that keeps its own height and the others share the rest
+		const evenH = bodyH / s.table.rows.length;
+		const tallNeeds = needHs.filter((n) => n > evenH);
+		const shortH = (bodyH - tallNeeds.reduce((a, b) => a + b, 0)) / (s.table.rows.length - tallNeeds.length);
+		const rowHs = needHs.map((n) => (n > evenH ? n : shortH));
 		const totalH = TABLE_HEAD_H + rowHs.reduce((a, b) => a + b, 0);
-		if (totalH > o.h + TABLE_FIT_TOLERANCE) console.warn(`WARNING: ${o.name} needs ${totalH.toFixed(2)} in but has ${o.h.toFixed(2)} in`);
+		if (shortH < Math.max(...needHs.filter((n) => n <= evenH)) - TABLE_FIT_TOLERANCE) console.warn(`WARNING: ${o.name} does not fit in ${o.h.toFixed(2)} in`);
 		slide.addTable(rows, { x: o.x, y: o.y, w, colW: o.colW, rowH: [TABLE_HEAD_H].concat(rowHs), border: { type: "solid", pt: TABLE_BORDER_PT, color: C.accent6 }, objectName: o.name });
 		return { w, h: Math.max(o.h, totalH) };
 	}
@@ -1004,14 +1014,18 @@ async function buildDeck(contentJson, outputPptx) {
 		caption(slide, "Figure caption", s.caption, CONTENT_X, img.y + img.h + CAPTION_GAP, img.w, CAPTION_TWO_LINE_H);
 		const rx = CONTENT_X + img.w + GAP;
 		const rw = CONTENT_X + CONTENT_W - rx;
-		const cardH = (CONTENT_H - (s.cards.length - 1) * STACK_GAP) / s.cards.length;
+		const tx = rx + CARD_PAD + d.iconD + GAP_TIGHT;
+		const tw = rx + rw - CARD_PAD - tx;
+		// Card heights follow the text they hold (head line plus wrapped text), scaled together to fill the column
+		const needH = s.cards.map((c) => 2 * d.cardPad + (d.headPt * BODY_LINE_FACTOR) / 72 + textHeight(c.text, tw, d.textPt));
+		const scale = (CONTENT_H - (s.cards.length - 1) * STACK_GAP) / needH.reduce((a, b) => a + b, 0);
+		let y = CONTENT_TOP;
 		s.cards.forEach((c, i) => {
-			const y = CONTENT_TOP + i * (cardH + STACK_GAP);
+			const cardH = needH[i] * scale;
 			card(slide, `${o.partName} ${i + 1} card`, rx, y, rw, cardH);
 			iconBadge(slide, `${o.partName} ${i + 1} icon`, o.icons[i], rx + CARD_PAD, y + (cardH - d.iconD) / 2, d.iconD, C.accent2);
-			const tx = rx + CARD_PAD + d.iconD + GAP_TIGHT;
-			const tw = rx + rw - CARD_PAD - tx;
 			text(slide, `${o.partName} ${i + 1} text`, [{ text: c.head, options: { fontSize: d.headPt, bold: true, color: C.text2, breakLine: true } }, { text: c.text, options: { fontSize: d.textPt } }], tx, y + d.cardPad, tw, cardH - 2 * d.cardPad, { valign: "middle" });
+			y += cardH + STACK_GAP;
 		});
 	}
 
@@ -1091,7 +1105,7 @@ async function buildDeck(contentJson, outputPptx) {
 	builders.acceptance = (slide, s) => {
 		title(slide, s.title);
 		const a = ACCEPTANCE;
-		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: a.listW, pt: a.textPt, badgeD: a.iconD, gap: GAP, minRowH: (CONTENT_H - (s.checklist.length - 1) * GAP) / s.checklist.length, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
+		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: a.listW, pt: a.textPt, badgeD: a.iconD, gap: a.rowGap, fillH: CONTENT_H, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
 		const vx = CONTENT_X + a.listW + GAP;
 		const vw = CONTENT_X + CONTENT_W - vx;
 		card(slide, "Visual card", vx, CONTENT_TOP, vw, CONTENT_H);
@@ -1354,7 +1368,7 @@ async function buildDeck(contentJson, outputPptx) {
 		title(slide, s.title);
 		const d = DELIVERABLES;
 		const listW = d.listW;
-		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: listW, pt: d.textPt, badgeD: d.iconD, gap: GAP, minRowH: (CONTENT_H - (s.checklist.length - 1) * GAP) / s.checklist.length, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
+		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: listW, pt: d.textPt, badgeD: d.iconD, gap: d.rowGap, fillH: CONTENT_H, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
 		const sx = CONTENT_X + listW + GAP;
 		const sw = CONTENT_W - listW - GAP;
 		card(slide, "Software card", sx, CONTENT_TOP, sw, CONTENT_H);
