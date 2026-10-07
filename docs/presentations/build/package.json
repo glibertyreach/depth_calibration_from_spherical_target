@@ -1,7 +1,7 @@
 {
   "name": "stage1-deck-build",
   "private": true,
-  "description": "Generator dependencies for docs/presentations/stage1_capture_overview.pptx",
+  "description": "Generator dependencies for the stage-1 decks in docs/presentations/",
   "dependencies": {
     "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",

@@ -1,20 +1,23 @@
 "use strict";
 /**
- * Stage-1 capture overview deck generator.
+ * Stage-1 deck generator: builds the two stage-1 decks from their content files.
  *
- * Reads  docs/presentations/build/stage1_deck_content.json  (single source of truth for all text)
- * and    docs/presentations/assets/*.png                    (figures)
- * writes docs/presentations/stage1_capture_overview.pptx
+ *   procurement and build deck : build/stage1_build_deck_content.json     -> stage1_procurement_build.pptx
+ *   test procedure deck        : build/stage1_procedure_deck_content.json -> stage1_test_procedure.pptx
+ *
+ * Each content JSON is the single source of truth for that deck's text and speaker notes; the figures
+ * are read from docs/presentations/assets/*.png (pixel sizes are read at build time).
  *
  * Run from the repository root:
  *     NODE_PATH=<folder with node_modules for pptxgenjs, react-icons, react, react-dom, sharp> \
- *         node docs/presentations/build/make_stage1_deck.js
+ *         node docs/presentations/build/make_stage1_deck.js                      # builds both decks
+ *     NODE_PATH=... node docs/presentations/build/make_stage1_deck.js <content.json> <output.pptx>   # builds one
  *
  * Structure (see the pptx skill, "Structured decks"):
  *   - a named theme ("Stage-1 Capture") whose colors are written into the file by applyTheme();
  *   - every color is a theme (scheme) color, except inside rasterized icons (images need hex);
  *   - two layouts: TITLE_DARK and TITLE_ONLY, with named placeholders that slides fill by name;
- *   - one section per topic; speaker notes on every slide.
+ *   - one section per topic (each slide's "section" field); speaker notes on every slide.
  *
  * All sizes are inches unless a name says "PT" (points). Nothing is hard-coded in the slide
  * builders: every dimension, font size, spacing and color comes from the constants below.
@@ -32,8 +35,11 @@ const fa = require("react-icons/fa");
 // File locations (relative to the repository root, which is the working directory)
 // ---------------------------------------------------------------------------------------------
 const PRESENTATIONS_DIR = path.join("docs", "presentations");
-const CONTENT_JSON = path.join(PRESENTATIONS_DIR, "build", "stage1_deck_content.json");
-const OUTPUT_PPTX = path.join(PRESENTATIONS_DIR, "stage1_capture_overview.pptx");
+// The two decks built when no command-line arguments are given: [content JSON, output pptx].
+const DECKS = [
+	[path.join(PRESENTATIONS_DIR, "build", "stage1_build_deck_content.json"), path.join(PRESENTATIONS_DIR, "stage1_procurement_build.pptx")],
+	[path.join(PRESENTATIONS_DIR, "build", "stage1_procedure_deck_content.json"), path.join(PRESENTATIONS_DIR, "stage1_test_procedure.pptx")],
+];
 // Folder of the pptx skill's scripts; only apply_theme.js is used from it.
 const SKILL_SCRIPTS_DIR =
 	process.env.PPTX_SKILL_SCRIPTS ||
@@ -64,6 +70,7 @@ const THEME = {
 };
 
 // Theme font references, so that text follows the theme instead of naming a font.
+const DECK_SUBJECT = "Stage-1 depth-sensor calibration captures"; // document property shared by both decks
 const HEAD_FONT_REF = "+mj-lt"; // theme heading font (Cambria)
 const MONO_FONT = "Courier New"; // the one explicitly named font: the pose-log example line
 
@@ -90,14 +97,12 @@ const CONTENT_BOTTOM = NUMBER_Y - GAP; // last y available to content
 const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP; // height available to content
 
 // Dark layout: title top-left as on content slides but larger, then subtitle, footer at the bottom.
-const DARK_TITLE_H = 0.95; // title placeholder height (one line at DARK_TITLE_PT)
+const DARK_TITLE_H = 1.6; // title placeholder height: two lines at DARK_TITLE_PT (titles run to one or two lines; the text sits at the bottom of the box, next to the subtitle)
 const DARK_SUBTITLE_Y = MARGIN + DARK_TITLE_H + GAP_TIGHT; // subtitle top
 const DARK_SUBTITLE_W = 9.0; // subtitle width (wraps to two lines)
 const DARK_SUBTITLE_H = 0.9; // subtitle height
 const DARK_FOOTER_H = 0.4; // footer placeholder height
 const DARK_FOOTER_Y = SLIDE_H - MARGIN - DARK_FOOTER_H; // footer top
-const DARK_CONTENT_TOP = MARGIN + DARK_TITLE_H + GAP; // first y of content on the closing slide
-const DARK_CONTENT_H = SLIDE_H - MARGIN - DARK_CONTENT_TOP; // closing-slide content height (no slide number there, so content may reach the bottom margin)
 
 // ---------------------------------------------------------------------------------------------
 // Typography (points)
@@ -162,15 +167,15 @@ const TABLE_BORDER_PT = 0.5; // table rule weight
 // ---------------------------------------------------------------------------------------------
 // Title slide graphic (sphere B, sphere A and board, bottom-aligned): sizes in inches
 const TITLE_ART = {
-	sphereBD: 3.4, // large sphere diameter
-	sphereAD: 1.7, // small sphere diameter
-	boardW: 2.6, // board width
-	boardH: 1.9, // board height
+	sphereBD: 2.7, // large sphere diameter (sized so the graphic fits between subtitle and footer)
+	sphereAD: 1.35, // small sphere diameter
+	boardW: 2.1, // board width
+	boardH: 1.5, // board height
 	gapBelowSubtitle: GAP, // gap between subtitle and the top of the graphic
 	bottomGap: GAP, // gap between graphic baseline and footer
 	outlinePt: 2, // outline weight of the shapes
 	boardRadius: 0.1, // board corner radius
-	crossLen: 0.5, // length of the TCP cross inside the large sphere
+	crossLen: 0.45, // length of the TCP cross inside the large sphere
 	crossThick: 0.05, // thickness of the TCP cross
 };
 
@@ -192,7 +197,7 @@ const FLOW = {
 };
 
 const FIXTURES = {
-	imageCardW: 7.0, // white card holding the figure and its caption
+	imageCardW: 7.6, // white card holding the figure and its caption
 	captionH: 0.5, // caption box height (two lines at CAPTION_PT)
 	iconD: ICON_BADGE_D,
 	headPt: CARD_HEAD_PT,
@@ -217,27 +222,90 @@ const SPHERES = {
 	bulletPt: BODY_PT,
 };
 
+// Figures that stand bare on the slide (no white card around them) get a thin outline of their own size.
+const FIGURE_FRAME_PT = OUTLINE_PT; // outline weight of a bare figure's frame
+const CAPTION_GAP = GAP_TIGHT; // gap between a figure and the caption under it
+const CAPTION_LINE_H = 0.3; // height of a one-line caption (12 pt)
+const CAPTION_TWO_LINE_H = 0.5; // height of a two-line caption
+const STACK_GAP = GAP; // gap between stacked cards (step lists, card columns)
+
 const MOUNTING = {
-	imageH: 3.5, // height of the larger image
-	image2H: 2.7, // height of the smaller image
-	cardW: 8.3, // width of the white image card
-	captionH: 0.5, // caption height
+	captionH: CAPTION_TWO_LINE_H, // caption height (bottom of the right column)
 	pointsPt: BODY_PT,
 };
 
+const SPHERE_END = {
+	labelPt: BODY_PT, // bold label under each image
+	labelH: 0.35, // label height (one line)
+	labelGap: GAP_TIGHT, // gap between an image and its label
+};
+
 const TCP = {
-	imageCardW: 4.3, // white card with the portrait figure
 	stepPt: BODY_PT,
-	rowCardPad: 0.12, // padding inside a step card (tight so five cards fit)
+	rowCardPad: 0.1, // padding inside a step card (tight so five cards fit with GAP between them)
 	get minRowH() {
 		return BADGE_D + 2 * this.rowCardPad; // minimum step-card height
 	},
 };
 
 const BOARD = {
-	imageCardW: 5.0, // white card with the figure
 	pointPt: BODY_PT,
 	rowGap: GAP, // gap between rows
+};
+
+const BOARD_BUILD = {
+	captionH: CAPTION_TWO_LINE_H, // caption under the figure (two lines at CAPTION_PT)
+	iconD: ICON_BADGE_D,
+	headPt: CARD_HEAD_PT,
+	textPt: BODY_MIN_PT,
+	cardPad: GAP_TIGHT, // padding inside each of the four cards (tighter than CARD_PAD so four cards fit)
+	headH: 0.35, // card head height (one line)
+};
+
+// Three-ball nest diagram (native shapes). Dimensions in inches, true to scale with each other:
+// the sphere rests on the three balls, so its height above them follows from the other sizes.
+const NEST = {
+	cardW: 6.6, // white card holding both views
+	baseW: 2.9, // base plate width in the side view, and the base outline's side in the top view
+	plateH: 0.28, // base plate thickness in the side view
+	sphereD: 2.3, // large sphere diameter
+	ballD: 0.6, // nest ball diameter
+	triangleR: 0.72, // distance of each ball center from the nest axis (top view)
+	viewGap: GAP, // gap between the two views
+	labelPt: BODY_MIN_PT, // "Side view" / "Top view" labels
+	labelH: 0.35,
+	labelGap: GAP_TIGHT,
+	crossLen: 0.4, // red center cross, arm to arm
+	crossPt: 3, // red cross line weight
+	dashedPt: 2, // dashed sphere outline weight (top view)
+	outlinePt: 1.5, // outline weight of balls and sphere
+	baseRadius: 0.08, // corner radius of the base outline (top view)
+	pointPt: BODY_PT,
+	iconD: BADGE_SMALL_D,
+	get sphereR() { return this.sphereD / 2; },
+	get ballR() { return this.ballD / 2; },
+	// Height of the sphere center above the ball centers: sphere and ball touch, so
+	// (sphereR + ballR)^2 = triangleR^2 + rise^2
+	get rise() { return Math.sqrt((this.sphereR + this.ballR) ** 2 - this.triangleR ** 2); },
+	// Horizontal offset of the two visible balls in the side view (one edge of the triangle faces the viewer)
+	get ballOffsetX() { return this.triangleR * Math.cos(Math.PI / 6); },
+	// Height of the side-view drawing from the sphere's top to the plate's bottom
+	get sideH() { return this.sphereR + this.rise + this.ballR + this.plateH; },
+};
+
+const SUPPLIERS = {
+	colW: [3.1, 5.2, 4.03], // Item, Candidate suppliers, Notes (sums to CONTENT_W)
+	cellPt: BODY_MIN_PT, // 14 pt fits; the table never goes below it
+	headH: 0.5, // header row height
+	cellMargin: [0.05, 0.12, 0.05, 0.12], // top, right, bottom, left (inches)
+	captionH: CAPTION_LINE_H,
+};
+
+const ACCEPTANCE = {
+	listW: 7.5, // checklist column width
+	textPt: BODY_PT,
+	iconD: BADGE_SMALL_D,
+	badgeD: 2.6, // large clipboard-check circle on the right
 };
 
 const BOOTSTRAP = {
@@ -257,11 +325,12 @@ const BOOTSTRAP = {
 };
 
 const PLAN = {
-	imageCardW: 7.9, // white card with the plan picture and caption
-	captionH: 0.5,
-	valuePt: STAT_MED_PT,
-	valueW: 1.3, // width reserved for the stat value
+	imageTargetW: 9.5, // wanted figure width; the height available may allow less
+	captionH: CAPTION_LINE_H, // one-line caption under the figure
+	valuePt: STAT_SMALL_PT,
+	valueH: 0.6, // stat value line height
 	labelPt: LABEL_PT,
+	cardPad: GAP_TIGHT, // padding inside the narrow stat cards
 };
 
 const LOOP = {
@@ -292,12 +361,18 @@ const CHECKS = {
 	captionH: 0.3,
 };
 
-const INDEPENDENT = {
+// Three or two columns of icon + head + bullets over one boxed key message (independent, robot_program).
+const COLUMNS_MESSAGE = {
 	iconD: ICON_BADGE_D,
 	headPt: HEAD_PT,
 	bulletPt: 18,
 	messageH: 1.3, // message box height
 	messageIconD: ICON_BADGE_D,
+};
+const ROBOT_PROGRAM = {
+	bulletPt: BODY_PT, // three narrow columns: 16 pt keeps the longest column inside its card
+	paraSpacePt: PARA_SPACE_PT, // tighter than the roomy default so the longest column fits
+	messageH: 1.0,
 };
 
 const SPOILERS = {
@@ -317,20 +392,11 @@ const DELIVERABLES = {
 	bulletPt: BODY_PT,
 };
 
-const NEXT = {
-	groupShares: [3.0, 3.0, 3.8], // relative widths of Open, Decided, Next steps
-	headPt: HEAD_PT,
-	headH: 0.45,
-	itemPt: BODY_PT,
-	iconD: BADGE_SMALL_D,
-};
-
-// Labels that are not content from the JSON but are needed to read a diagram or group.
+// Labels that are not content from the JSON but are needed to read a diagram.
 const EXTRA_LABELS = {
 	sensor: "Sensor", // bootstrap diagram
-	openHead: "Open",
-	decidedHead: "Decided",
-	stepsHead: "Next steps",
+	sideView: "Side view", // nest diagram
+	topView: "Top view", // nest diagram
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -383,15 +449,16 @@ async function renderIcon(Component, hex) {
 // ---------------------------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------------------------
-async function main() {
-	const content = JSON.parse(fs.readFileSync(CONTENT_JSON, "utf8"));
+/** Build one deck: read the content JSON, write the .pptx, then put the theme colors into the file. */
+async function buildDeck(contentJson, outputPptx) {
+	const content = JSON.parse(fs.readFileSync(contentJson, "utf8"));
 
 	const pres = new pptxgen();
 	pres.layout = "LAYOUT_WIDE";
 	pres.theme = { headFontFace: THEME.headFontFace, bodyFontFace: THEME.bodyFontFace };
-	pres.title = "Stage-1 Calibration Captures";
+	pres.title = content.slides[0].title; // the title slide's title names the deck
 	pres.author = "Depth calibration from spherical target";
-	pres.subject = "Stage-1 capture procedure overview";
+	pres.subject = DECK_SUBJECT;
 	const C = pres.SchemeColor; // scheme colors: text1 dk1, text2 dk2, background1 lt1, background2 lt2, accent1..6
 
 	// ---- Icons (white glyphs on colored circles; one teal glyph for list check marks) ----------
@@ -424,6 +491,12 @@ async function main() {
 		table: fa.FaTable,
 		board: fa.FaBorderAll,
 		camera: fa.FaCamera,
+		input: fa.FaFileImport,
+		cogs: fa.FaCogs,
+		output: fa.FaFileExport,
+		robot: fa.FaRobot,
+		clipboardCheck: fa.FaClipboardCheck,
+		paint: fa.FaPaintRoller,
 	};
 	const iconWhite = {};
 	for (const [key, comp] of Object.entries(iconSources)) iconWhite[key] = await renderIcon(comp, WHITE_HEX);
@@ -449,7 +522,7 @@ async function main() {
 		title: "TITLE_DARK",
 		background: { color: C.text2 },
 		objects: [
-			{ placeholder: { options: { name: "title", type: "title", x: MARGIN, y: MARGIN, w: CONTENT_W, h: DARK_TITLE_H, fontFace: HEAD_FONT_REF, fontSize: DARK_TITLE_PT, bold: true, color: C.background1, align: "left", valign: "top", margin: 0 }, text: "Title" } },
+			{ placeholder: { options: { name: "title", type: "title", x: MARGIN, y: MARGIN, w: CONTENT_W, h: DARK_TITLE_H, fontFace: HEAD_FONT_REF, fontSize: DARK_TITLE_PT, bold: true, color: C.background1, align: "left", valign: "bottom", margin: 0 }, text: "Title" } },
 			{ placeholder: { options: { name: "subtitle", type: "body", x: MARGIN, y: DARK_SUBTITLE_Y, w: DARK_SUBTITLE_W, h: DARK_SUBTITLE_H, fontSize: DARK_SUBTITLE_PT, color: C.accent6, align: "left", valign: "top", margin: 0 }, text: "Subtitle" } },
 			{ placeholder: { options: { name: "footer", type: "body", x: MARGIN, y: DARK_FOOTER_Y, w: CONTENT_W, h: DARK_FOOTER_H, fontSize: FOOTER_PT, color: C.accent6, align: "left", valign: "bottom", margin: 0 }, text: "Footer" } },
 		],
@@ -526,6 +599,18 @@ async function main() {
 		return a === "bottom-left";
 	}
 
+	/** A bare figure (no card behind it): the image fitted into its box, with a thin outline of its own size. */
+	function framedImage(slide, name, rel, bx, by, bw, bh, align = "center") {
+		const box = fitImage(slide, name, rel, bx, by, bw, bh, align);
+		slide.addShape(R.rect, { x: box.x, y: box.y, w: box.w, h: box.h, fill: { type: "none" }, line: { color: C.accent6, width: FIGURE_FRAME_PT }, objectName: name + " frame" });
+		return box;
+	}
+
+	/** Caption in the muted caption style. */
+	function caption(slide, name, str, x, y, w, h, o = {}) {
+		text(slide, name, str, x, y, w, h, Object.assign({ fontSize: CAPTION_PT, color: C.accent5 }, o));
+	}
+
 	/** Stat callout: value above label (stacked) inside a tint card. */
 	function statCard(slide, name, stat, x, y, w, h, valuePt, valueH, labelH, labelPt = LABEL_PT) {
 		card(slide, name + " card", x, y, w, h);
@@ -544,7 +629,7 @@ async function main() {
 	 * A vertical list of rows, each with a badge on the left and wrapped text on the right.
 	 * Returns the y just below the last row.
 	 * opts: x, y, w, pt, badge(i,item)->{kind:'num'|'icon'|'glyph', ...}, badgeD, cardKind (null|'tint'|'dark'|'white'),
-	 *       textColor, gap, minRowH
+	 *       textColor, gap, minRowH, fixedRowH
 	 */
 	function rowList(slide, name, items, o) {
 		let y = o.y;
@@ -555,7 +640,7 @@ async function main() {
 			const str = typeof item === "string" ? item : item.text;
 			const textH = textHeight(str, textW, o.pt);
 			const inner = Math.max(o.badgeD, textH);
-			const rowH = Math.max(o.minRowH || 0, inner + pad * 2);
+			const rowH = o.fixedRowH || Math.max(o.minRowH || 0, inner + pad * 2); // fixedRowH: equal rows, text is known to fit
 			if (o.cardKind) card(slide, `${name} row ${i + 1} card`, o.x, y, o.w, rowH, o.cardKind);
 			const by = y + (rowH - o.badgeD) / 2;
 			const b = o.badge(i, item);
@@ -713,57 +798,168 @@ async function main() {
 	builders.mounting = (slide, s) => {
 		title(slide, s.title);
 		const m = MOUNTING;
-		const cardW = m.cardW;
-		const innerW = cardW - 2 * CARD_PAD;
-		card(slide, "Figures card", CONTENT_X, CONTENT_TOP, cardW, CONTENT_H, "white");
-		// Two images on a common baseline: image larger, image2 smaller
-		const i1 = imageInfo[s.image];
-		const i2 = imageInfo[s.image2];
-		const w1 = m.imageH * (i1.w / i1.h);
-		const w2 = m.image2H * (i2.w / i2.h);
-		const rowW = w1 + GAP + w2;
-		const groupH = m.imageH + GAP_TIGHT + m.captionH;
-		const gy = CONTENT_TOP + (CONTENT_H - groupH) / 2;
-		const rx0 = CONTENT_X + CARD_PAD + (innerW - rowW) / 2;
-		const baseline = gy + m.imageH;
-		fitImage(slide, "Adapter on flange with stem", s.image, rx0, gy, w1, m.imageH, "bottom-left");
-		fitImage(slide, "Steel sphere with bonded stem", s.image2, rx0 + w1 + GAP, baseline - m.image2H, w2, m.image2H, "bottom-left");
-		text(slide, "Figures caption", s.caption, CONTENT_X + CARD_PAD, baseline + GAP_TIGHT, innerW, m.captionH, { fontSize: CAPTION_PT, color: C.accent5 });
-		const px = CONTENT_X + cardW + GAP;
-		const pw = CONTENT_W - cardW - GAP;
-		card(slide, "Points card", px, CONTENT_TOP, pw, CONTENT_H);
-		bullets(slide, "Mounting points", s.points, px + CARD_PAD, CONTENT_TOP + CARD_PAD, pw - 2 * CARD_PAD, CONTENT_H - 2 * CARD_PAD, { fontSize: m.pointsPt, valign: "middle" });
+		// One image at the full content height; the caption has no room under it, so it sits at the
+		// bottom of the right column, below the points card.
+		const img = framedImage(slide, "Adapter on flange with stem", s.image, CONTENT_X, CONTENT_TOP, CONTENT_W, CONTENT_H, "left");
+		const px = img.x + img.w + GAP;
+		const pw = CONTENT_X + CONTENT_W - px;
+		const cardH = CONTENT_H - GAP - m.captionH;
+		card(slide, "Points card", px, CONTENT_TOP, pw, cardH);
+		bullets(slide, "Mounting points", s.points, px + CARD_PAD, CONTENT_TOP + CARD_PAD, pw - 2 * CARD_PAD, cardH - 2 * CARD_PAD, { fontSize: m.pointsPt, valign: "middle", paraSpacePt: PARA_SPACE_LOOSE_PT });
+		caption(slide, "Figure caption", s.caption, px, CONTENT_BOTTOM - m.captionH, pw, m.captionH, { valign: "bottom" });
+	};
+
+	builders.sphere_end = (slide, s) => {
+		title(slide, s.title);
+		const e = SPHERE_END;
+		// Two images, each at most half the content width, both at the largest common height the slide allows
+		const halfW = (CONTENT_W - GAP) / 2;
+		const left = imageInfo[s.image];
+		const right = imageInfo[s.image2];
+		const heightAvail = CONTENT_H - CAPTION_LINE_H - GAP - e.labelH - e.labelGap;
+		const imgH = Math.min(heightAvail, halfW / (left.w / left.h), halfW / (right.w / right.h));
+		const leftW = imgH * (left.w / left.h);
+		const rightW = imgH * (right.w / right.h);
+		const rightX = CONTENT_X + CONTENT_W - rightW; // right image flush with the right margin
+		framedImage(slide, "Ceramic sphere with threaded insert", s.image, CONTENT_X, CONTENT_TOP, leftW, imgH, "left");
+		framedImage(slide, "Steel sphere with bonded blind hole", s.image2, rightX, CONTENT_TOP, rightW, imgH, "left");
+		const ly = CONTENT_TOP + imgH + e.labelGap;
+		text(slide, "Label ceramic sphere", s.label, CONTENT_X, ly, leftW, e.labelH, { fontSize: e.labelPt, bold: true, color: C.text2 });
+		text(slide, "Label steel sphere", s.label2, rightX, ly, rightW, e.labelH, { fontSize: e.labelPt, bold: true, color: C.text2 });
+		caption(slide, "Figure caption", s.caption, CONTENT_X, CONTENT_BOTTOM - CAPTION_LINE_H, CONTENT_W, CAPTION_LINE_H, { valign: "bottom" });
+	};
+
+	builders.board_build = (slide, s) => {
+		title(slide, s.title);
+		const b = BOARD_BUILD;
+		// Figure at the largest size that leaves room for its caption underneath
+		const imgBoxH = CONTENT_H - CAPTION_GAP - b.captionH;
+		const info = imageInfo[s.image];
+		const img = framedImage(slide, "Board on its adapter", s.image, CONTENT_X, CONTENT_TOP, imgBoxH * (info.w / info.h), imgBoxH, "left");
+		caption(slide, "Figure caption", s.caption, CONTENT_X, img.y + img.h + CAPTION_GAP, img.w, b.captionH);
+		const rx = CONTENT_X + img.w + GAP;
+		const rw = CONTENT_X + CONTENT_W - rx;
+		const cardH = (CONTENT_H - (s.cards.length - 1) * STACK_GAP) / s.cards.length;
+		const icons = ["board", "paint", "ruler", "wrench"];
+		s.cards.forEach((c, i) => {
+			const y = CONTENT_TOP + i * (cardH + STACK_GAP);
+			card(slide, `Board part ${i + 1} card`, rx, y, rw, cardH);
+			iconBadge(slide, `Board part ${i + 1} icon`, icons[i], rx + CARD_PAD, y + (cardH - b.iconD) / 2, b.iconD, C.accent2);
+			const tx = rx + CARD_PAD + b.iconD + GAP_TIGHT;
+			const tw = rx + rw - CARD_PAD - tx;
+			text(slide, `Board part ${i + 1} text`, [{ text: c.head, options: { fontSize: b.headPt, bold: true, color: C.text2, breakLine: true } }, { text: c.text, options: { fontSize: b.textPt } }], tx, y + b.cardPad, tw, cardH - 2 * b.cardPad, { valign: "middle" });
+		});
+	};
+
+	builders.nest_build = (slide, s) => {
+		title(slide, s.title);
+		const n = NEST;
+		// Left: white card with the side view and the top view of the nest, drawn with native shapes.
+		card(slide, "Nest diagram card", CONTENT_X, CONTENT_TOP, n.cardW, CONTENT_H, "white");
+		const viewW = n.baseW;
+		const drawingH = n.sideH; // both views are about this tall; they share one baseline (bottom edge)
+		const blockH = drawingH + n.labelGap + n.labelH;
+		const top = CONTENT_TOP + (CONTENT_H - blockH) / 2;
+		const bottom = top + drawingH; // baseline shared by both views
+		const rowW = 2 * viewW + n.viewGap;
+		const sideX = CONTENT_X + (n.cardW - rowW) / 2;
+		const topX = sideX + viewW + n.viewGap;
+		const ballLine = () => ({ color: C.accent5, width: n.outlinePt });
+
+		// --- Side view: base plate, two visible balls, and the sphere resting on them
+		const plateY = bottom - n.plateH;
+		slide.addShape(R.rect, { x: sideX, y: plateY, w: n.baseW, h: n.plateH, fill: { color: C.accent3 }, line: { type: "none" }, objectName: "Side view base plate" });
+		const ballCY = plateY - n.ballR; // balls sit on the plate
+		const midX = sideX + viewW / 2;
+		[-1, 1].forEach((side, i) => {
+			slide.addShape(R.ellipse, { x: midX + side * n.ballOffsetX - n.ballR, y: ballCY - n.ballR, w: n.ballD, h: n.ballD, fill: { color: C.accent5 }, line: ballLine(), objectName: `Side view ball ${i + 1}` });
+		});
+		const sphereCY = ballCY - n.rise;
+		slide.addShape(R.ellipse, { x: midX - n.sphereR, y: sphereCY - n.sphereR, w: n.sphereD, h: n.sphereD, fill: { color: C.background2 }, line: ballLine(), objectName: "Side view sphere" });
+		const cross = (cx, cy, label) => {
+			slide.addShape(R.line, { x: cx - n.crossLen / 2, y: cy, w: n.crossLen, h: 0, line: { color: C.accent4, width: n.crossPt }, objectName: label + " cross horizontal" });
+			slide.addShape(R.line, { x: cx, y: cy - n.crossLen / 2, w: 0, h: n.crossLen, line: { color: C.accent4, width: n.crossPt }, objectName: label + " cross vertical" });
+		};
+		cross(midX, sphereCY, "Side view sphere center");
+		text(slide, "Side view label", EXTRA_LABELS.sideView, sideX, bottom + n.labelGap, viewW, n.labelH, { fontSize: n.labelPt, bold: true, color: C.accent5, align: "center" });
+
+		// --- Top view: base outline, three balls on a triangle, the sphere's dashed outline, red center cross
+		const baseTop = bottom - n.baseW;
+		const tcx = topX + viewW / 2;
+		const tcy = baseTop + n.baseW / 2;
+		slide.addShape(R.roundRect, { x: topX, y: baseTop, w: n.baseW, h: n.baseW, rectRadius: n.baseRadius, fill: { color: C.accent6 }, line: { color: C.accent3, width: n.outlinePt }, objectName: "Top view base outline" });
+		[0, 1, 2].forEach((k) => {
+			const ang = -Math.PI / 2 + (k * 2 * Math.PI) / 3; // one ball straight "up" in the drawing
+			slide.addShape(R.ellipse, { x: tcx + n.triangleR * Math.cos(ang) - n.ballR, y: tcy + n.triangleR * Math.sin(ang) - n.ballR, w: n.ballD, h: n.ballD, fill: { color: C.accent5 }, line: ballLine(), objectName: `Top view ball ${k + 1}` });
+		});
+		slide.addShape(R.ellipse, { x: tcx - n.sphereR, y: tcy - n.sphereR, w: n.sphereD, h: n.sphereD, fill: { type: "none" }, line: { color: C.text2, width: n.dashedPt, dashType: "dash" }, objectName: "Top view sphere outline" });
+		cross(tcx, tcy, "Top view sphere center");
+		text(slide, "Top view label", EXTRA_LABELS.topView, topX, bottom + n.labelGap, viewW, n.labelH, { fontSize: n.labelPt, bold: true, color: C.accent5, align: "center" });
+
+		// Right: the four points as icon rows
+		const rx = CONTENT_X + n.cardW + GAP;
+		const rw = CONTENT_X + CONTENT_W - rx;
+		const icons = ["circle", "check", "tool", "clock"];
+		const rowGap = STACK_GAP; // rows of 16 pt text in tint cards; nest points are the longest text on the slide
+		const minRowH = (CONTENT_H - (s.points.length - 1) * rowGap) / s.points.length;
+		rowList(slide, "Nest point", s.points, { x: rx, y: CONTENT_TOP, w: rw, pt: n.pointPt, badgeD: n.iconD, gap: rowGap, fixedRowH: minRowH, cardKind: "tint", cardPad: GAP_TIGHT, badge: (i) => ({ kind: "icon", icon: icons[i], fill: C.accent2 }) });
+	};
+
+	builders.suppliers = (slide, s) => {
+		title(slide, s.title);
+		const t = SUPPLIERS;
+		const headCell = (str) => ({ text: glue(str), options: { bold: true, color: C.background1, fill: { color: C.text2 }, align: "left", valign: "middle", fontSize: t.cellPt, margin: t.cellMargin } });
+		const rows = [s.table.header.map(headCell)];
+		s.table.rows.forEach((r, i) => {
+			const base = { fill: { color: i % 2 === 0 ? C.background1 : C.background2 }, color: C.text1, align: "left", valign: "middle", fontSize: t.cellPt, margin: t.cellMargin };
+			rows.push(r.map((cellText, ci) => ({ text: glue(cellText), options: Object.assign({ bold: ci === 0, color: ci === 0 ? C.text2 : C.text1 }, base) })));
+		});
+		const captionY = CONTENT_BOTTOM - t.captionH;
+		const tableH = captionY - GAP - CONTENT_TOP;
+		const bodyRowH = (tableH - t.headH) / s.table.rows.length;
+		slide.addTable(rows, { x: CONTENT_X, y: CONTENT_TOP, w: CONTENT_W, colW: t.colW, rowH: [t.headH].concat(s.table.rows.map(() => bodyRowH)), border: { type: "solid", pt: TABLE_BORDER_PT, color: C.accent6 }, objectName: "Suppliers table" });
+		caption(slide, "Suppliers caption", s.caption, CONTENT_X, captionY, CONTENT_W, t.captionH, { valign: "bottom" });
+	};
+
+	builders.acceptance = (slide, s) => {
+		title(slide, s.title);
+		const a = ACCEPTANCE;
+		rowList(slide, "Checklist", s.checklist, { x: CONTENT_X, y: CONTENT_TOP, w: a.listW, pt: a.textPt, badgeD: a.iconD, gap: GAP, minRowH: (CONTENT_H - (s.checklist.length - 1) * GAP) / s.checklist.length, cardKind: null, cardPad: 0, badge: () => ({ kind: "glyph", data: iconTealCheckSquare }) });
+		const vx = CONTENT_X + a.listW + GAP;
+		const vw = CONTENT_X + CONTENT_W - vx;
+		card(slide, "Visual card", vx, CONTENT_TOP, vw, CONTENT_H);
+		iconBadge(slide, "Clipboard check icon", "clipboardCheck", vx + (vw - a.badgeD) / 2, CONTENT_TOP + (CONTENT_H - a.badgeD) / 2, a.badgeD, C.accent2);
 	};
 
 	builders.tcp = (slide, s) => {
 		title(slide, s.title);
 		const t = TCP;
-		card(slide, "Figure card", CONTENT_X, CONTENT_TOP, t.imageCardW, CONTENT_H, "white");
-		fitImage(slide, "Finding the tool center point with a three-ball nest", s.image, CONTENT_X + CARD_PAD, CONTENT_TOP + CARD_PAD, t.imageCardW - 2 * CARD_PAD, CONTENT_H - 2 * CARD_PAD);
-		const rx = CONTENT_X + t.imageCardW + GAP;
-		const rw = CONTENT_W - t.imageCardW - GAP;
-		// Step cards share the available height equally (rows grow only if text needs it)
+		// Portrait figure at the full content height on the left, steps on the right
+		const img = framedImage(slide, "Finding the tool center point with a three-ball nest", s.image, CONTENT_X, CONTENT_TOP, CONTENT_W, CONTENT_H, "left");
+		const rx = img.x + img.w + GAP;
+		const rw = CONTENT_X + CONTENT_W - rx;
+		// Step cards share the available height (rows grow only if text needs it)
 		const texts = s.steps.map((st) => st.text);
 		const need = texts.map((tx) => Math.max(t.minRowH, textHeight(tx, rw - 2 * t.rowCardPad - BADGE_D - GAP_TIGHT, t.stepPt) + 2 * t.rowCardPad));
-		const extra = (CONTENT_H - (s.steps.length - 1) * GAP_TIGHT - need.reduce((a, b) => a + b, 0)) / s.steps.length;
+		const extra = (CONTENT_H - (s.steps.length - 1) * STACK_GAP - need.reduce((a, b) => a + b, 0)) / s.steps.length;
 		let y = CONTENT_TOP;
 		s.steps.forEach((st, i) => {
 			const rowH = need[i] + Math.max(0, extra);
 			card(slide, `Step ${st.n} card`, rx, y, rw, rowH);
-			numberBadge(slide, `Step ${st.n} badge`, st.n, rx + t.rowCardPad, y + (rowH - BADGE_D) / 2, BADGE_D, C.accent1);
-			const tx = rx + t.rowCardPad + BADGE_D + GAP_TIGHT;
-			text(slide, `Step ${st.n} text`, st.text, tx, y, rx + rw - t.rowCardPad - tx, rowH, { fontSize: t.stepPt, valign: "middle" });
-			y += rowH + GAP_TIGHT;
+			numberBadge(slide, `Step ${st.n} badge`, st.n, rx + CARD_PAD / 2, y + (rowH - BADGE_D) / 2, BADGE_D, C.accent1);
+			const tx = rx + CARD_PAD / 2 + BADGE_D + GAP_TIGHT;
+			text(slide, `Step ${st.n} text`, st.text, tx, y, rx + rw - CARD_PAD / 2 - tx, rowH, { fontSize: t.stepPt, valign: "middle" });
+			y += rowH + STACK_GAP;
 		});
 	};
 
 	builders.board = (slide, s) => {
 		title(slide, s.title);
 		const b = BOARD;
-		card(slide, "Figure card", CONTENT_X, CONTENT_TOP, b.imageCardW, CONTENT_H, "white");
-		fitImage(slide, "Board on the flange with its tool frame", s.image, CONTENT_X + CARD_PAD, CONTENT_TOP + CARD_PAD, b.imageCardW - 2 * CARD_PAD, CONTENT_H - 2 * CARD_PAD);
-		const rx = CONTENT_X + b.imageCardW + GAP;
-		const rw = CONTENT_W - b.imageCardW - GAP;
+		// Figure at the full content height on the left, check rows on the right
+		const img = framedImage(slide, "Board on the flange with its tool frame", s.image, CONTENT_X, CONTENT_TOP, CONTENT_W, CONTENT_H, "left");
+		const rx = img.x + img.w + GAP;
+		const rw = CONTENT_X + CONTENT_W - rx;
 		// Rows are spread over the full height so the list is centered against the figure
 		const rowH = (CONTENT_H - (s.points.length - 1) * b.rowGap) / s.points.length;
 		rowList(slide, "Board point", s.points, { x: rx, y: CONTENT_TOP, w: rw, pt: b.pointPt, badgeD: BADGE_SMALL_D, gap: b.rowGap, minRowH: rowH, cardKind: null, cardPad: 0, badge: () => ({ kind: "icon", icon: "check", fill: C.accent2 }) });
@@ -810,22 +1006,23 @@ async function main() {
 	builders.plan = (slide, s) => {
 		title(slide, s.title);
 		const p = PLAN;
+		// Figure as wide as the target allows, but never taller than the space above its caption
 		const info = imageInfo[s.image];
-		const innerW = p.imageCardW - 2 * CARD_PAD;
-		const imgH = innerW * (info.h / info.w);
-		const cardH = CARD_PAD + imgH + GAP_TIGHT + p.captionH + CARD_PAD;
-		card(slide, "Figure card", CONTENT_X, CONTENT_TOP, p.imageCardW, cardH, "white");
-		fitImage(slide, "Planned poses: side view and front view", s.image, CONTENT_X + CARD_PAD, CONTENT_TOP + CARD_PAD, innerW, imgH);
-		text(slide, "Figure caption", s.caption, CONTENT_X + CARD_PAD, CONTENT_TOP + CARD_PAD + imgH + GAP_TIGHT, innerW, p.captionH, { fontSize: CAPTION_PT, color: C.accent5 });
-		const rx = CONTENT_X + p.imageCardW + GAP;
-		const rw = CONTENT_W - p.imageCardW - GAP;
-		const statH = (cardH - (s.stats.length - 1) * GAP) / s.stats.length;
+		const maxH = CONTENT_H - CAPTION_GAP - p.captionH;
+		const imgW = Math.min(p.imageTargetW, maxH * (info.w / info.h));
+		const img = framedImage(slide, "Planned poses: side view and front view", s.image, CONTENT_X, CONTENT_TOP, imgW, maxH, "left");
+		caption(slide, "Figure caption", s.caption, CONTENT_X, img.y + img.h + CAPTION_GAP, img.w, p.captionH);
+		// Stat callouts stacked in the narrower right column, over the full content height
+		const rx = CONTENT_X + img.w + GAP;
+		const rw = CONTENT_X + CONTENT_W - rx;
+		const statH = (CONTENT_H - (s.stats.length - 1) * STACK_GAP) / s.stats.length;
 		s.stats.forEach((st, i) => {
-			const y = CONTENT_TOP + i * (statH + GAP);
+			const y = CONTENT_TOP + i * (statH + STACK_GAP);
 			card(slide, `Stat ${i + 1} card`, rx, y, rw, statH);
-			text(slide, `Stat ${i + 1} value`, st.value, rx + CARD_PAD, y, p.valueW, statH, { fontFace: HEAD_FONT_REF, fontSize: p.valuePt, bold: true, color: C.accent1, valign: "middle" });
-			const lx = rx + CARD_PAD + p.valueW + GAP_TIGHT;
-			text(slide, `Stat ${i + 1} label`, st.label, lx, y, rx + rw - CARD_PAD - lx, statH, { fontSize: p.labelPt, valign: "middle" });
+			const labelH = textHeight(st.label, rw - 2 * p.cardPad, p.labelPt);
+			const top = y + (statH - p.valueH - labelH) / 2; // value and label form one block, centered in the card
+			text(slide, `Stat ${i + 1} value`, st.value, rx + p.cardPad, top, rw - 2 * p.cardPad, p.valueH, { fontFace: HEAD_FONT_REF, fontSize: p.valuePt, bold: true, color: C.accent1, valign: "middle" });
+			text(slide, `Stat ${i + 1} label`, st.label, rx + p.cardPad, top + p.valueH, rw - 2 * p.cardPad, labelH, { fontSize: p.labelPt });
 		});
 	};
 
@@ -919,25 +1116,41 @@ async function main() {
 		text(slide, "Checks caption", s.caption, CONTENT_X, captionY, CONTENT_W, k.captionH, { fontSize: CAPTION_PT, color: C.accent5, valign: "bottom" });
 	};
 
-	builders.independent = (slide, s) => {
-		title(slide, s.title);
-		const d = INDEPENDENT;
+	/**
+	 * Columns of (teal icon circle, head, bullets) over one boxed key message.
+	 * o: { sizes, bulletPt, boxFill, boxLine, boxIcon, boxIconFill, textPt }
+	 */
+	function columnsWithMessage(slide, s, o) {
+		const d = o.sizes;
 		const n = s.columns.length;
 		const colW = (CONTENT_W - (n - 1) * GAP) / n;
-		const colsH = CONTENT_H - GAP - d.messageH;
+		const colsH = CONTENT_H - GAP - o.messageH;
 		s.columns.forEach((col, i) => {
 			const x = CONTENT_X + i * (colW + GAP);
 			card(slide, `Column ${i + 1} card`, x, CONTENT_TOP, colW, colsH);
 			iconBadge(slide, `Column ${i + 1} icon`, col.icon, x + CARD_PAD, CONTENT_TOP + CARD_PAD, d.iconD, C.accent2);
 			text(slide, `Column ${i + 1} head`, col.head, x + CARD_PAD + d.iconD + GAP_TIGHT, CONTENT_TOP + CARD_PAD, colW - 2 * CARD_PAD - d.iconD - GAP_TIGHT, d.iconD, { fontFace: HEAD_FONT_REF, fontSize: d.headPt, bold: true, color: C.text2, valign: "middle" });
 			const by = CONTENT_TOP + CARD_PAD + d.iconD + GAP_TIGHT;
-			bullets(slide, `Column ${i + 1} points`, col.points, x + CARD_PAD, by, colW - 2 * CARD_PAD, CONTENT_TOP + colsH - CARD_PAD - by, { fontSize: d.bulletPt, paraSpacePt: PARA_SPACE_LOOSE_PT });
+			bullets(slide, `Column ${i + 1} points`, col.points, x + CARD_PAD, by, colW - 2 * CARD_PAD, CONTENT_TOP + colsH - CARD_PAD - by, { fontSize: o.bulletPt, paraSpacePt: o.paraSpacePt });
 		});
 		const my = CONTENT_TOP + colsH + GAP;
-		slide.addShape(R.roundRect, { x: CONTENT_X, y: my, w: CONTENT_W, h: d.messageH, rectRadius: CARD_RADIUS, fill: { color: C.background1 }, line: { color: C.accent4, width: OUTLINE_PT * 2 }, objectName: "Message box" });
-		iconBadge(slide, "Message icon", "warning", CONTENT_X + CARD_PAD, my + (d.messageH - d.messageIconD) / 2, d.messageIconD, C.accent4);
+		slide.addShape(R.roundRect, { x: CONTENT_X, y: my, w: CONTENT_W, h: o.messageH, rectRadius: CARD_RADIUS, fill: { color: o.boxFill }, line: { color: o.boxLine, width: OUTLINE_PT * 2 }, objectName: "Message box" });
+		iconBadge(slide, "Message icon", o.boxIcon, CONTENT_X + CARD_PAD, my + (o.messageH - d.messageIconD) / 2, d.messageIconD, o.boxIconFill);
 		const mtx = CONTENT_X + CARD_PAD + d.messageIconD + GAP_TIGHT;
-		text(slide, "Key message", s.message, mtx, my, CONTENT_X + CONTENT_W - CARD_PAD - mtx, d.messageH, { fontSize: BOX_MESSAGE_PT, bold: true, color: C.text2, valign: "middle" });
+		text(slide, "Key message", s.message, mtx, my, CONTENT_X + CONTENT_W - CARD_PAD - mtx, o.messageH, { fontSize: BOX_MESSAGE_PT, bold: true, color: C.text2, valign: "middle" });
+	}
+
+	builders.independent = (slide, s) => {
+		title(slide, s.title);
+		const d = COLUMNS_MESSAGE;
+		columnsWithMessage(slide, s, { sizes: d, bulletPt: d.bulletPt, paraSpacePt: PARA_SPACE_LOOSE_PT, messageH: d.messageH, boxFill: C.background1, boxLine: C.accent4, boxIcon: "warning", boxIconFill: C.accent4 });
+	};
+
+	builders.robot_program = (slide, s) => {
+		title(slide, s.title);
+		const r = ROBOT_PROGRAM;
+		// Like the loop slide's message box: tint fill, orange outline, orange icon circle
+		columnsWithMessage(slide, s, { sizes: COLUMNS_MESSAGE, bulletPt: r.bulletPt, paraSpacePt: r.paraSpacePt, messageH: r.messageH, boxFill: C.background2, boxLine: C.accent1, boxIcon: "robot", boxIconFill: C.accent1 });
 	};
 
 	builders.spoilers = (slide, s) => {
@@ -977,26 +1190,6 @@ async function main() {
 		bullets(slide, "Software points", s.software.points, sx + CARD_PAD, by, sw - 2 * CARD_PAD, CONTENT_TOP + CONTENT_H - CARD_PAD - by, { fontSize: d.bulletPt, paraSpacePt: PARA_SPACE_LOOSE_PT });
 	};
 
-	builders.next = (slide, s) => {
-		title(slide, s.title);
-		const nx = NEXT;
-		const shareSum = nx.groupShares.reduce((a, b) => a + b, 0);
-		const usable = CONTENT_W - (nx.groupShares.length - 1) * GAP;
-		let x = CONTENT_X;
-		const groups = [
-			{ key: "open", head: EXTRA_LABELS.openHead, items: s.open, badge: () => ({ kind: "icon", icon: "question", fill: C.accent1 }) },
-			{ key: "decided", head: EXTRA_LABELS.decidedHead, items: s.decided, badge: () => ({ kind: "icon", icon: "check", fill: C.accent2 }) },
-			{ key: "steps", head: EXTRA_LABELS.stepsHead, items: s.steps, badge: (i) => ({ kind: "num", n: i + 1, fill: C.accent1 }) },
-		];
-		groups.forEach((g, gi) => {
-			const w = (usable * nx.groupShares[gi]) / shareSum;
-			card(slide, `${g.head} group card`, x, DARK_CONTENT_TOP, w, DARK_CONTENT_H, "dark");
-			text(slide, `${g.head} group head`, g.head, x + CARD_PAD, DARK_CONTENT_TOP + CARD_PAD, w - 2 * CARD_PAD, nx.headH, { fontFace: HEAD_FONT_REF, fontSize: nx.headPt, bold: true, color: C.background1, valign: "middle" });
-			rowList(slide, `${g.head} item`, g.items, { x: x + CARD_PAD, y: DARK_CONTENT_TOP + CARD_PAD + nx.headH + GAP_TIGHT, w: w - 2 * CARD_PAD, pt: nx.itemPt, badgeD: nx.iconD, gap: GAP_TIGHT, minRowH: nx.iconD + GAP_TIGHT, cardKind: null, cardPad: 0, textColor: C.background1, badge: g.badge, badgePt: SMALL_BADGE_NUM_PT });
-			x += w + GAP;
-		});
-	};
-
 	// ---- Assemble slides ---------------------------------------------------------------------
 	let currentSection = null;
 	for (const s of content.slides) {
@@ -1013,9 +1206,21 @@ async function main() {
 	}
 
 	// ---- Write, then put the theme colors into the file ---------------------------------------
-	await pres.writeFile({ fileName: OUTPUT_PPTX });
-	await applyTheme(OUTPUT_PPTX, THEME);
-	console.log("Wrote " + OUTPUT_PPTX);
+	await pres.writeFile({ fileName: outputPptx });
+	await applyTheme(outputPptx, THEME);
+	console.log("Wrote " + outputPptx);
+}
+
+/** Command line: no arguments builds both decks; <content.json> <output.pptx> builds one. */
+async function main() {
+	const args = process.argv.slice(2);
+	if (args.length === 0) {
+		for (const [contentJson, outputPptx] of DECKS) await buildDeck(contentJson, outputPptx);
+	} else if (args.length === 2) {
+		await buildDeck(args[0], args[1]);
+	} else {
+		throw new Error("Usage: node make_stage1_deck.js [<content.json> <output.pptx>]");
+	}
 }
 
 main().catch((err) => {
