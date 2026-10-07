@@ -1,6 +1,6 @@
 """
 fig_fixtures.png -- the three fixtures of the stage-1 capture procedure, drawn
-to scale for sphere A (radius 38.1 mm):
+to scale for the 40 mm sphere:
 
  (a) the sphere on its stem, seen from the side, with the sensor's viewing
      direction: the stem points away from the sensor so that the sphere hides
@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, FancyArrowPatch, Polygon, Rectangle
 
-SPHERE_RADIUS_MM = 38.1
+SPHERE_RADIUS_MM = 40.0
 STEM_LENGTH_MM = 130.0          # flange face to sphere surface
 STEM_DIAMETER_MM = 16.0
 ADAPTER_THICKNESS_MM = 12.0
@@ -71,7 +71,7 @@ def draw_sphere_mount(ax):
     ax.text(stem_x0 + STEM_LENGTH_MM / 2, y_dim - 10, f"stem {STEM_LENGTH_MM:.0f} mm (at least 2R + 50)",
             ha="center", fontsize=7)
     ax.annotate("", (center_x, 0), (center_x, SPHERE_RADIUS_MM), arrowprops=dict(arrowstyle="<->", lw=0.8))
-    ax.text(center_x + 6, SPHERE_RADIUS_MM / 2, f"R = {SPHERE_RADIUS_MM:.1f}", fontsize=7)
+    ax.text(center_x + 6, SPHERE_RADIUS_MM / 2, f"R = {SPHERE_RADIUS_MM:.0f}", fontsize=7)
     ax.text(flange_x - 7, -FLANGE_WIDTH_MM / 2 - 8, "robot flange", fontsize=7, ha="center", va="top", color=DARK)
     ax.text(flange_x + ADAPTER_THICKNESS_MM / 2 + 10, ADAPTER_WIDTH_MM / 2 + 6, "adapter (doweled)", fontsize=6.5,
             ha="left", va="bottom", color=DARK)
