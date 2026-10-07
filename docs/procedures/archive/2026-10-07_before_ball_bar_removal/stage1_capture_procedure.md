@@ -107,6 +107,8 @@ Cell:
 - Drill and tap the cell table for the nest (four M8) and the run-out base plate (two M8).
 - Identify and record the robot base frame used for the session.
 
+No two-sphere ball bar is used; section 9 describes the checks that take its place.
+
 ## 2. Before anything else
 
 1. Switch the sensor on and leave it running for at least 30 minutes before the first capture, and leave it running for the whole session. Note the time it was switched on.
@@ -242,7 +244,7 @@ pose_id, kind, radius_mm, half_width_mm, half_height_mm, x_mm, y_mm, z_mm, rotat
 - `radius_mm`: the measured radius for a sphere, half the diameter measured after the matte finish (nominally 38.10 for sphere A, 76.20 for sphere B), empty for a board.
 - `half_width_mm`, `half_height_mm`: half the measured board size, empty for a sphere.
 - `x_mm`, `y_mm`, `z_mm`: the reported TCP position in the base frame.
-- `rotation_type` and `r1..r4`: the reported tool orientation, in whatever form the controller gives, named by one of: `quaternion_wxyz`, `quaternion_xyzw`, `euler_zyx_deg` (KUKA A, B, C), `fixed_xyz_deg` (FANUC W, P, R), `euler_xyz_deg`, `rotvec_deg`, `matrix` (nine numbers, the rotation matrix row by row), or `none` for a sphere (its orientation does not matter). When the `matrix` form is used, the r columns run to `r9` (`r1..r9`). Fill unused r columns with nothing.
+- `rotation_type` and `r1..r4`: the reported tool orientation, in whatever form the controller gives, named by one of: `quaternion_wxyz`, `quaternion_xyzw`, `euler_zyx_deg` (KUKA A, B, C), `fixed_xyz_deg` (FANUC W, P, R), `euler_xyz_deg`, `rotvec_deg`, or `none` for a sphere (its orientation does not matter). Fill unused r columns with nothing.
 
 Example lines:
 
@@ -280,14 +282,14 @@ Re-capture flagged poses after fixing the cause; do not delete the lines from th
 
 ## 9. Checks that do not depend on the robot
 
-Two checks that do not use the robot's positions come from the captures already planned, and the fit's report computes them on the held-out poses; nothing extra has to be captured.
+No certified ball bar is available, so the session contains no artifact whose geometry is known independently of the robot. Two checks that do not use the robot's positions come from the captures already planned, and the fit's report computes them on the held-out poses; nothing extra has to be captured.
 
 - Sphere shape. Each held-out sphere is fitted with its radius left free. After correction, the fitted radius should agree with the measured radius, and the points should lie closer to the fitted sphere than before. The report gives each fitted radius with its standard error, which is large for a small or distant sphere (the sensor sees only a cap, on which radius and distance trade off); judge each radius error against its own standard error.
 - Board flatness. Each held-out board's points are fitted with a plane of their own. After correction, their spread about that plane should fall toward the plate's measured flatness. This check sees only errors that bend the board's image; an error that shifts or tilts the whole board leaves its flatness unchanged, so it is weaker than the sphere check and mainly catches the fixed pattern.
 
 Your part is to make the references good: measure the sphere diameters carefully (section 3a, items 5 and 6) and keep the board's flatness report with the session notes.
 
-What these checks cannot do well is test the scale of the volume. A uniform range-scale error changes a sphere's fitted radius only by the scale error times the radius (a 0.1 percent error changes sphere A's radius by 0.04 mm). Scale is therefore checked mainly by the held-out sphere centers against the robot, which are limited by the robot's 0.1 mm accuracy.
+What these checks cannot do is what the ball bar did best: test the scale of the volume. A uniform range-scale error changes a sphere's fitted radius only by the scale error times the radius (a 0.1 percent error changes sphere A's radius by 0.04 mm), whereas a bar shows it over its full length. Scale is therefore checked mainly by the held-out sphere centers against the robot, which are limited by the robot's 0.1 mm accuracy. If a coordinate measuring machine becomes available later, two spheres on a rigid bar measured on it restore the full check.
 
 ## 10. Deliverables checklist
 
