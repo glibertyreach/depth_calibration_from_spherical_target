@@ -23,6 +23,7 @@ No dimension of a part lives here; this module holds only drafting standards.
 
 from __future__ import annotations
 
+import itertools
 import math
 import textwrap  # noqa: F401  (kept for callers that want to pre-wrap text)
 from dataclasses import dataclass
@@ -44,7 +45,12 @@ OUTPUT_DPI = 200  # raster resolution of the PNG files
 SHEET_WIDTH_IN = 16.5  # page width, inches -> 3300 px at 200 dpi
 SHEET_HEIGHT_IN = 10.5  # page height, inches -> 2100 px at 200 dpi
 MM_PER_IN = 25.4  # unit conversion
-PT_PER_MM = 72.0 / MM_PER_IN  # points per millimeter (for line widths)
+PT_PER_IN = 72.0  # typographic points per inch
+PT_PER_MM = PT_PER_IN / MM_PER_IN  # points per millimeter (for line widths)
+MM_PER_PT = MM_PER_IN / PT_PER_IN  # millimeters per point (for text heights)
+FULL_CIRCLE_DEG = 360.0  # one full turn
+RIGHT_ANGLE_DEG = 90.0  # quarter turn
+VERTICAL_TEXT_DEG = 90.0  # rotation of vertical dimension text
 SHEET_W = SHEET_WIDTH_IN * MM_PER_IN  # page width in paper mm
 SHEET_H = SHEET_HEIGHT_IN * MM_PER_IN  # page height in paper mm
 SHEET_MARGIN = 8.0  # distance from page edge to the border frame, paper mm
@@ -71,7 +77,14 @@ FONT_LABEL = 12.0  # view labels, pt
 FONT_TITLE = 15.0  # part name in the title block, pt
 FONT_FRAME = 10.0  # text inside feature control frames, pt
 FONT_DATUM = 11.0  # datum letters, pt
+NOTE_INDENT = 7.5  # hanging indent of numbered notes, paper mm
 LINE_SPACING = 1.18  # multi-line text spacing factor
+NOTE_LINE_FACTOR = 1.05  # extra leading of numbered notes and boxed notes
+NOTE_PARAGRAPH_GAP = 0.25  # gap between notes, as a fraction of the line height
+NOTE_TITLE_DY = 3.4  # notes title baseline below the block top, paper mm
+NOTE_TITLE_GAP = 5.4  # gap between the notes title and the first note
+BOXED_NOTE_PAD = 2.0  # padding inside a boxed note
+BOXED_NOTE_BASELINE = 0.78  # first baseline of a boxed note, as a fraction of the line height
 
 # --------------------------------------------------------------------------
 # Line widths (points) and dash patterns (points on / off)
@@ -108,6 +121,7 @@ ARROW_HALF_W = 0.55  # arrow head half width
 EXT_GAP = 1.0  # gap between feature and start of an extension line
 EXT_OVERSHOOT = 1.8  # extension line runs this far past the dimension line
 TEXT_GAP = 0.9  # gap between a dimension line and its text baseline
+VERT_TEXT_EXTRA = 0.9  # extra clearance for descenders of rotated dimension text
 TEXT_PAD = 1.2  # clearance on each side of text inside a dimension
 OUTSIDE_TAIL = 5.0  # tail length of arrows placed outside a short dimension
 LEADER_SHOULDER = 4.0  # horizontal shoulder between a leader and its text
@@ -115,6 +129,21 @@ LEADER_TEXT_GAP = 1.0  # gap between the shoulder end and the leader text
 CENTER_EXT = 4.0  # centerlines extend this far beyond the feature
 CENTER_CROSS_EXT = 2.5  # small cross marks extend this far beyond a circle
 ARC_STEP_DEG = 2.0  # angular step used to draw circles as polylines
+LEADER_DOT_R = 0.5  # radius of the dot terminator of a leader
+DOT_POINTS = 16  # polygon points used to fill a leader dot
+BREAK_POINTS_PER_WAVE = 12  # sample points per wave of a break line
+BREAK_MIN_POINTS = 8  # minimum number of points of a break line
+HATCH_MARGIN = 2.0  # hatch lines extend this far beyond the polygon bounding box
+CUT_END_LEN = 9.0  # thick end segment of a cutting-plane line
+CUT_ARROW_LEN = 9.0  # arrow shaft length of a cutting-plane line
+CUT_LABEL_GAP = 3.2  # gap between a cutting-plane arrow and its letter
+CUT_BEND_MARK = 4.0  # thick mark at a bend of a cutting-plane line
+# z-order of drawing layers (higher is drawn on top)
+Z_HATCH = 1  # hatching
+Z_MASK = 2  # white masks behind frames and symbols
+Z_LINE = 3  # lines
+Z_FILL = 4  # filled arrow heads and symbols
+Z_TEXT = 10  # text
 BREAK_AMPLITUDE = 1.0  # freehand break line amplitude
 BREAK_WAVELENGTH = 7.0  # freehand break line wavelength
 
@@ -136,6 +165,12 @@ DATUM_TRI_H = 2.8  # datum triangle height
 DATUM_STEM = 5.0  # line from the triangle apex to the letter box
 DATUM_BOX = 5.6  # side of the datum letter box
 SYMBOL_MARGIN = 1.3  # margin between a frame symbol and its cell edge
+SYM_FLAT_SKEW = 0.55  # flatness parallelogram: horizontal skew (fraction of the symbol half size)
+SYM_FLAT_HEIGHT = 0.55  # flatness parallelogram: half height (fraction)
+SYM_PARA_OFFSET = 0.35  # parallelism: line offset from center (fraction)
+SYM_PARA_SLANT = 0.45  # parallelism: horizontal half extent of each line (fraction)
+SYM_COAX_INNER = 0.55  # coaxiality: inner circle radius (fraction)
+SYM_POSITION_R = 0.7  # position: circle radius (fraction)
 
 # --------------------------------------------------------------------------
 # Title block (paper mm)
@@ -146,6 +181,14 @@ TB_NAME_ROW_H = 11.5  # part-name row height
 TB_LABEL_W = 30.0  # width of the label part of a row
 TB_PAD = 1.8  # text padding inside cells
 TB_ROWS = 6  # number of standard rows below the part-name row
+TB_HALF = 0.5  # half-width cell fraction
+TB_TOL_FRAC = 0.62  # width fraction of the general-tolerance cell
+TB_PROJECT_FRAC = 0.38  # width fraction of the project cell
+TB_LABEL_NARROW = 0.75  # label width factor for half-width cells
+TABLE_ROW_H = 5.4  # default row height of simple tables
+TABLE_TITLE_DY = 3.4  # table title baseline below the top
+TABLE_HEADER_DY = 6.0  # distance from the top to the first table rule
+TABLE_PAD = 1.2  # text padding inside table cells
 TB_HEIGHT = TB_NAME_ROW_H + TB_ROWS * TB_ROW_H  # total height
 TB_LEFT = FRAME_RIGHT - TB_WIDTH  # left x of the title block
 TB_BOTTOM = FRAME_BOTTOM  # bottom y of the title block
@@ -238,7 +281,7 @@ class Sheet:
 
     # ---- low-level drawing in paper coordinates --------------------------
     def line(self, pts: Sequence[Point], style: str = "outline", color: str = BLACK,
-             register: bool = True, zorder: float = 3) -> None:
+             register: bool = True, zorder: float = Z_LINE) -> None:
         """Draw a polyline in paper mm using a named line style."""
         lw, ls = STYLES[style]
         xs, ys = zip(*pts)
@@ -248,7 +291,7 @@ class Sheet:
             for a, b in zip(pts[:-1], pts[1:]):
                 self.segments.append((a, b, style))
 
-    def polygon_fill(self, pts: Sequence[Point], color: str, zorder: float = 4) -> None:
+    def polygon_fill(self, pts: Sequence[Point], color: str, zorder: float = Z_FILL) -> None:
         """Draw a filled polygon (arrow heads, datum triangles, masks)."""
         self.ax.add_patch(Polygon(pts, closed=True, facecolor=color, edgecolor=color,
                                   lw=0, zorder=zorder))
@@ -264,7 +307,7 @@ class Sheet:
                            (base[0] - ARROW_HALF_W * nx, base[1] - ARROW_HALF_W * ny)], color)
 
     def circle(self, c: Point, r: float, style: str = "outline", a0: float = 0.0,
-               a1: float = 360.0, color: str = BLACK) -> None:
+               a1: float = FULL_CIRCLE_DEG, color: str = BLACK) -> None:
         """Draw a circle or arc (paper mm, angles in degrees)."""
         n = max(2, int(abs(a1 - a0) / ARC_STEP_DEG) + 1)
         pts = [polar(c, r, a) for a in np.linspace(a0, a1, n)]
@@ -281,7 +324,7 @@ class Sheet:
         nx, ny = -uy, ux  # normal to the hatch lines
         # Project the bounding-box corners on the normal to get the offset range.
         offs = [nx * x + ny * y for x in (xmin, xmax) for y in (ymin, ymax)]
-        diag = math.hypot(xmax - xmin, ymax - ymin) + 2.0
+        diag = math.hypot(xmax - xmin, ymax - ymin) + HATCH_MARGIN
         k0, k1 = math.floor(min(offs) / spacing), math.ceil(max(offs) / spacing)
         cx, cy = (xmin + xmax) / 2, (ymin + ymax) / 2
         for k in range(k0, k1 + 1):
@@ -290,13 +333,13 @@ class Sheet:
             t = d - (nx * cx + ny * cy)
             px, py = cx + nx * t, cy + ny * t
             ln, = self.ax.plot([px - ux * diag, px + ux * diag], [py - uy * diag, py + uy * diag],
-                               color=BLACK, lw=LW_HATCH, solid_capstyle="butt", zorder=1)
+                               color=BLACK, lw=LW_HATCH, solid_capstyle="butt", zorder=Z_HATCH)
             ln.set_clip_path(clip)
 
     def wavy(self, p0: Point, p1: Point, style: str = "thin") -> None:
         """Draw a freehand-looking break line between two paper points."""
         length = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
-        n = max(8, int(length / BREAK_WAVELENGTH * 12))
+        n = max(BREAK_MIN_POINTS, int(length / BREAK_WAVELENGTH * BREAK_POINTS_PER_WAVE))
         ux, uy = (p1[0] - p0[0]) / length, (p1[1] - p0[1]) / length
         pts = []
         for i in range(n + 1):
@@ -316,7 +359,7 @@ class Sheet:
 
     def text(self, x: float, y: float, s: str, size: float = FONT_NOTE, ha: str = "left",
              va: str = "baseline", rotation: float = 0.0, color: str = BLACK,
-             weight: str = "normal", check: bool = True, zorder: float = 10) -> tuple[float, float, float, float]:
+             weight: str = "normal", check: bool = True, zorder: float = Z_TEXT) -> tuple[float, float, float, float]:
         """Place text (paper mm).  Returns its bounding box (x0, y0, x1, y1)."""
         if size < FONT_MIN:
             raise ValueError(f"text '{s}' is smaller than {FONT_MIN} pt")
@@ -330,13 +373,13 @@ class Sheet:
             self.text_boxes.append((s.replace("\n", " / "), box))
         return box
 
-    def wrap(self, s: str, width: float, size: float = FONT_NOTE) -> list[str]:
+    def wrap(self, s: str, width: float, size: float = FONT_NOTE, weight: str = "normal") -> list[str]:
         """Greedy word wrap of ``s`` to ``width`` paper mm using measured widths."""
         lines: list[str] = []
         cur = ""
         for word in s.split():
             trial = word if not cur else cur + " " + word
-            if self.measure(trial, size)[0] <= width or not cur:
+            if self.measure(trial, size, weight)[0] <= width or not cur:
                 cur = trial
             else:
                 lines.append(cur)
@@ -390,12 +433,12 @@ class Sheet:
         self.text(x0 + TB_PAD, y1 - TB_NAME_ROW_H / 2, f"{info.number}  {info.name}",
                   size=FONT_TITLE, va="center", weight="bold", check=False)
         rows = [
-            [("Drawing no.", info.number, 0.5), ("Quantity", info.quantity, 0.5)],
+            [("Drawing no.", info.number, TB_HALF), ("Quantity", info.quantity, TB_HALF)],
             [("Material", info.material, 1.0)],
             [("Finish", info.finish, 1.0)],
-            [("Scale", info.scale, 0.5), ("Date", TEXT_DATE, 0.5)],
-            [(None, TEXT_UNITS, 0.5), (None, TEXT_PROJECTION, 0.5)],
-            [(None, TEXT_TOLERANCES, 0.62), (None, TEXT_PROJECT, 0.38)],
+            [("Scale", info.scale, TB_HALF), ("Date", TEXT_DATE, TB_HALF)],
+            [(None, TEXT_UNITS, TB_HALF), (None, TEXT_PROJECTION, TB_HALF)],
+            [(None, TEXT_TOLERANCES, TB_TOL_FRAC), (None, TEXT_PROJECT, TB_PROJECT_FRAC)],
         ]
         y = yn
         for row in rows:
@@ -410,7 +453,7 @@ class Sheet:
                 if label:
                     self.text(tx, (y + y_next) / 2, label, size=FONT_MIN, va="center",
                               check=False)
-                    tx = x + (TB_LABEL_W if frac >= 1.0 else TB_LABEL_W * 0.75)
+                    tx = x + (TB_LABEL_W if frac >= 1.0 else TB_LABEL_W * TB_LABEL_NARROW)
                 self.text(tx, (y + y_next) / 2, value, size=FONT_NOTE, va="center",
                           weight="bold" if label else "normal", check=False)
                 x += w
@@ -418,35 +461,81 @@ class Sheet:
 
     # ---- notes -------------------------------------------------------------
     def notes_block(self, x: float, y_top: float, width: float, items: Iterable[str],
-                    title: str = "NOTES", size: float = FONT_NOTE) -> float:
+                    title: str = "NOTES", size: float = FONT_NOTE, start: int = 1) -> float:
         """Draw a numbered notes list; returns the y of the bottom of the block."""
-        self.text(x, y_top - 3.4, title, size=FONT_LABEL, weight="bold", check=False)
-        y = y_top - 3.4 - 5.4
-        indent = 6.0
-        line_h = size * 0.3528 * LINE_SPACING * 1.05  # pt -> mm with spacing
-        for i, item in enumerate(items, start=1):
+        y = y_top - NOTE_TITLE_DY
+        if title:
+            self.text(x, y, title, size=FONT_LABEL, weight="bold", check=False)
+            y -= NOTE_TITLE_GAP
+        indent = NOTE_INDENT
+        line_h = size * MM_PER_PT * LINE_SPACING * NOTE_LINE_FACTOR  # text height in mm
+        for i, item in enumerate(items, start=start):
             lines = self.wrap(item, width - indent, size)
             self.text(x, y, f"{i}.", size=size, check=False)
             for ln in lines:
                 self.text(x + indent, y, ln, size=size, check=False)
                 y -= line_h
-            y -= line_h * 0.25
+            y -= line_h * NOTE_PARAGRAPH_GAP
         return y
+
+    def notes_height(self, items: Iterable[str], width: float, size: float = FONT_NOTE) -> list[float]:
+        """Return the height each numbered note will occupy (paper mm)."""
+        line_h = size * MM_PER_PT * LINE_SPACING * NOTE_LINE_FACTOR
+        return [len(self.wrap(i, width - NOTE_INDENT, size)) * line_h + line_h * NOTE_PARAGRAPH_GAP for i in items]
+
+    def notes_columns(self, x: float, y_top: float, col_w: float, gap: float, items: Sequence[str],
+                      n_cols: int, title: str = "NOTES", size: float = FONT_NOTE) -> None:
+        """Lay numbered notes out in ``n_cols`` columns of roughly equal height."""
+        heights = self.notes_height(items, col_w, size)
+        best = None
+        # brute force over the split points: minimize the tallest column
+        for cuts in itertools.combinations(range(1, len(items)), n_cols - 1):
+            bounds = (0,) + cuts + (len(items),)
+            tallest = max(sum(heights[bounds[i]:bounds[i + 1]]) for i in range(n_cols))
+            if best is None or tallest < best[0]:
+                best = (tallest, bounds)
+        bounds = best[1]
+        for c in range(n_cols):
+            start, end = bounds[c], bounds[c + 1]
+            self.notes_block(x + c * (col_w + gap), y_top, col_w, items[start:end],
+                             title=title if c == 0 else "", start=start + 1, size=size)
 
     def boxed_note(self, x: float, y_top: float, width: float, text: str,
                    color: str = RED, size: float = FONT_NOTE, weight: str = "bold") -> float:
         """Draw a boxed critical note; returns the y of the bottom of the box."""
-        pad = 2.0
-        lines = self.wrap(text, width - 2 * pad, size)
-        line_h = size * 0.3528 * LINE_SPACING * 1.05
+        pad = BOXED_NOTE_PAD
+        lines = self.wrap(text, width - 2 * pad, size, weight)
+        line_h = size * MM_PER_PT * LINE_SPACING * NOTE_LINE_FACTOR
         height = 2 * pad + line_h * len(lines)
         self.line([(x, y_top), (x + width, y_top), (x + width, y_top - height),
                    (x, y_top - height), (x, y_top)], "title", color=color, register=False)
-        y = y_top - pad - line_h * 0.78
+        y = y_top - pad - line_h * BOXED_NOTE_BASELINE
         for ln in lines:
             self.text(x + pad, y, ln, size=size, color=color, weight=weight, check=False)
             y -= line_h
         return y_top - height
+
+    def table(self, x: float, y_top: float, widths: Sequence[float], rows: Sequence[Sequence[str]],
+              title: str, size: float = FONT_NOTE, row_h: float = TABLE_ROW_H) -> float:
+        """Draw a simple ruled table with a bold title; returns the y of its bottom."""
+        self.text(x, y_top - TABLE_TITLE_DY, title, size=FONT_LABEL, weight="bold", check=False)
+        y = y_top - TABLE_HEADER_DY
+        total = sum(widths)
+        for r, row in enumerate(rows):
+            yb = y - row_h
+            self.line([(x, y), (x + total, y)], "title", register=False)
+            xc = x
+            for w, cell in zip(widths, row):
+                self.text(xc + TABLE_PAD, (y + yb) / 2, cell, size=size, va="center", check=False,
+                          weight="bold" if r == 0 else "normal")
+                xc += w
+            y = yb
+        self.line([(x, y), (x + total, y)], "title", register=False)
+        xc = x
+        for w in list(widths) + [0.0]:
+            self.line([(xc, y_top - TABLE_HEADER_DY), (xc, y)], "title", register=False)
+            xc += w
+        return y
 
     # ---- feature control frame & datum -------------------------------------
     def _frame_symbol(self, kind: str, cx: float, cy: float, color: str) -> None:
@@ -457,19 +546,21 @@ class Sheet:
             self.line([(cx - h, cy - h), (cx + h, cy - h)], s, color, False)
             self.line([(cx, cy - h), (cx, cy + h)], s, color, False)
         elif kind == "flat":  # flatness: a parallelogram
-            k = h * 0.55
-            self.line([(cx - h, cy - k), (cx + h * 0.55, cy - k), (cx + h, cy + k),
-                       (cx - h * 0.55, cy + k), (cx - h, cy - k)], s, color, False)
+            k = h * SYM_FLAT_HEIGHT
+            skew = h * SYM_FLAT_SKEW
+            self.line([(cx - h, cy - k), (cx + skew, cy - k), (cx + h, cy + k),
+                       (cx - skew, cy + k), (cx - h, cy - k)], s, color, False)
         elif kind == "para":  # parallelism: two slanted lines
-            for dx in (-h * 0.35, h * 0.35):
-                self.line([(cx + dx - h * 0.45, cy - h), (cx + dx + h * 0.45, cy + h)], s, color, False)
+            for dx in (-h * SYM_PARA_OFFSET, h * SYM_PARA_OFFSET):
+                self.line([(cx + dx - h * SYM_PARA_SLANT, cy - h), (cx + dx + h * SYM_PARA_SLANT, cy + h)],
+                          s, color, False)
         elif kind == "coax":  # coaxiality: two concentric circles
             self.circle((cx, cy), h, s, color=color)
-            self.circle((cx, cy), h * 0.55, s, color=color)
+            self.circle((cx, cy), h * SYM_COAX_INNER, s, color=color)
         elif kind == "straight":  # straightness: a horizontal line
             self.line([(cx - h, cy), (cx + h, cy)], s, color, False)
         elif kind == "position":  # true position: circle with crosshair
-            self.circle((cx, cy), h * 0.7, s, color=color)
+            self.circle((cx, cy), h * SYM_POSITION_R, s, color=color)
             self.line([(cx - h, cy), (cx + h, cy)], s, color, False)
             self.line([(cx, cy - h), (cx, cy + h)], s, color, False)
         else:
@@ -485,6 +576,7 @@ class Sheet:
         cells = [FCF_H, tw + 2 * FCF_PAD] + [FCF_H] * len(datums)
         total = sum(cells)
         yb, yt = y - FCF_H / 2, y + FCF_H / 2
+        self.polygon_fill([(x, yb), (x + total, yb), (x + total, yt), (x, yt)], WHITE, zorder=Z_MASK)  # mask hatching
         self.line([(x, yb), (x + total, yb), (x + total, yt), (x, yt), (x, yb)], "frame", color)
         xc = x
         for w in cells[:-1]:
@@ -513,6 +605,8 @@ class Sheet:
         box_c = (apex[0] + ox * (DATUM_STEM + DATUM_BOX / 2), apex[1] + oy * (DATUM_STEM + DATUM_BOX / 2))
         self.line([apex, (apex[0] + ox * DATUM_STEM, apex[1] + oy * DATUM_STEM)], "thin", color)
         b = DATUM_BOX / 2
+        self.polygon_fill([(box_c[0] - b, box_c[1] - b), (box_c[0] + b, box_c[1] - b),
+                           (box_c[0] + b, box_c[1] + b), (box_c[0] - b, box_c[1] + b)], WHITE, zorder=Z_MASK)
         self.line([(box_c[0] - b, box_c[1] - b), (box_c[0] + b, box_c[1] - b),
                    (box_c[0] + b, box_c[1] + b), (box_c[0] - b, box_c[1] + b),
                    (box_c[0] - b, box_c[1] - b)], "frame", color)
@@ -554,7 +648,7 @@ class View:
         self.sheet.line(paper, style, color)
 
     def circle(self, c: Point, r: float, style: str = "outline", a0: float = 0.0,
-               a1: float = 360.0, color: str = BLACK) -> None:
+               a1: float = FULL_CIRCLE_DEG, color: str = BLACK) -> None:
         self.sheet.circle(self.P(*c), r * self.scale, style, a0, a1, color)
 
     def hatch(self, pts: Sequence[Point], other: bool = False) -> None:
@@ -588,7 +682,7 @@ class View:
     # ---- linear dimensions ---------------------------------------------------
     def dim_h(self, u0: float, u1: float, v0: float, v1: float, offset: float, text: str,
               text_pos: float = 0.5, outside: str | None = None, ext0: bool = True,
-              ext1: bool = True) -> None:
+              ext1: bool = True, base_v: float | None = None) -> None:
         """Horizontal dimension between (u0, v0) and (u1, v1).
 
         ``offset`` is the paper-mm distance from the outermost feature point to the
@@ -599,7 +693,10 @@ class View:
         x0, y0 = self.P(u0, v0)
         x1, y1 = self.P(u1, v1)
         sgn = 1.0 if offset >= 0 else -1.0
-        yd = (max(y0, y1) if sgn > 0 else min(y0, y1)) + offset
+        if base_v is not None:  # explicit baseline so that chained dimensions align
+            yd = self.P(0.0, base_v)[1] + offset
+        else:
+            yd = (max(y0, y1) if sgn > 0 else min(y0, y1)) + offset
         for x, y, on in ((x0, y0, ext0), (x1, y1, ext1)):
             if on:
                 sh.line([(x, y + sgn * EXT_GAP), (x, yd + sgn * EXT_OVERSHOOT)], "thin")
@@ -624,7 +721,7 @@ class View:
 
     def dim_v(self, u0: float, u1: float, v0: float, v1: float, offset: float, text: str,
               text_pos: float = 0.5, outside: str | None = None, ext0: bool = True,
-              ext1: bool = True) -> None:
+              ext1: bool = True, base_u: float | None = None) -> None:
         """Vertical dimension between (u0, v0) and (u1, v1).
 
         ``offset`` is the paper-mm distance from the outermost feature point to the
@@ -636,7 +733,10 @@ class View:
         x0, y0 = self.P(u0, v0)
         x1, y1 = self.P(u1, v1)
         sgn = 1.0 if offset >= 0 else -1.0
-        xd = (max(x0, x1) if sgn > 0 else min(x0, x1)) + offset
+        if base_u is not None:  # explicit baseline so that stacked dimensions align
+            xd = self.P(base_u, 0.0)[0] + offset
+        else:
+            xd = (max(x0, x1) if sgn > 0 else min(x0, x1)) + offset
         for x, y, on in ((x0, y0, ext0), (x1, y1, ext1)):
             if on:
                 sh.line([(x + sgn * EXT_GAP, y), (xd + sgn * EXT_OVERSHOOT, y)], "thin")
@@ -648,18 +748,18 @@ class View:
             sh.arrow((xd, ya), (0, -1))
             sh.arrow((xd, yb), (0, 1))
             cy = ya + (yb - ya) * text_pos
-            sh.text(xd - TEXT_GAP, cy, text, size=FONT_DIM, ha="center", rotation=90)
+            sh.text(xd - TEXT_GAP - VERT_TEXT_EXTRA, cy, text, size=FONT_DIM, ha="center", rotation=VERTICAL_TEXT_DEG)
         else:
             side = outside or "up"
             sh.line([(xd, ya - OUTSIDE_TAIL), (xd, yb + OUTSIDE_TAIL)], "thin")
             sh.arrow((xd, ya), (0, 1))
             sh.arrow((xd, yb), (0, -1))
             if side == "up":
-                sh.text(xd - TEXT_GAP, yb + OUTSIDE_TAIL + TEXT_GAP, text, size=FONT_DIM,
-                        ha="left", rotation=90)
+                sh.text(xd - TEXT_GAP - VERT_TEXT_EXTRA, yb + OUTSIDE_TAIL + TEXT_GAP, text, size=FONT_DIM,
+                        ha="left", rotation=VERTICAL_TEXT_DEG)
             else:
-                sh.text(xd - TEXT_GAP, ya - OUTSIDE_TAIL - TEXT_GAP, text, size=FONT_DIM,
-                        ha="right", rotation=90)
+                sh.text(xd - TEXT_GAP - VERT_TEXT_EXTRA, ya - OUTSIDE_TAIL - TEXT_GAP, text, size=FONT_DIM,
+                        ha="right", rotation=VERTICAL_TEXT_DEG)
 
     def dim_angle(self, center: Point, a0: float, a1: float, radius_paper: float, text: str,
                   text_dx: float = 0.0, text_dy: float = 0.0) -> None:
@@ -689,9 +789,8 @@ class View:
         if terminator == "arrow":
             sh.arrow(t, (t[0] - e[0], t[1] - e[1]), color)
         elif terminator == "dot":
-            sh.circle(t, 0.5, "thin", color=color)
-            sh.polygon_fill([(t[0] + 0.5 * math.cos(a), t[1] + 0.5 * math.sin(a))
-                             for a in np.linspace(0, 2 * math.pi, 16)], color)
+            sh.polygon_fill([(t[0] + LEADER_DOT_R * math.cos(a), t[1] + LEADER_DOT_R * math.sin(a))
+                             for a in np.linspace(0, 2 * math.pi, DOT_POINTS)], color)
         return sh.text(s_end[0] + sgn * LEADER_TEXT_GAP, s_end[1], text, size=size,
                        ha="left" if sgn > 0 else "right", va="center", color=color, weight=weight)
 
@@ -706,34 +805,32 @@ class View:
 
     # ---- cutting plane --------------------------------------------------------
     def cutting_plane(self, pts: Sequence[Point], sight: Point, label: str,
-                      end_len: float = 9.0, arrow_len: float = 9.0) -> None:
+                      end_len: float = CUT_END_LEN, arrow_len: float = CUT_ARROW_LEN,
+                      sight_end: Point | None = None) -> None:
         """Cutting-plane line through model points ``pts`` (a polyline, possibly bent).
 
-        ``sight`` is the paper-space unit vector of the viewing direction; arrows
-        at both ends point along it and the label letter is placed beyond them.
+        ``sight`` is the paper-space unit vector of the viewing direction at the first
+        end; ``sight_end`` is the one at the last end (for an aligned section the bent
+        leg is rotated, so its arrow is rotated too).  Arrows point along the sight
+        vector and the label letter is placed beyond them.
         """
         sh = self.sheet
         paper = [self.P(*p) for p in pts]
         sh.line(paper, "center")
-        ends = [(paper[0], paper[1]), (paper[-1], paper[-2])]
-        sx, sy = sight
-        for (p, q) in ends:
+        ends = [(paper[0], paper[1], sight), (paper[-1], paper[-2], sight_end or sight)]
+        for (p, q, (sx, sy)) in ends:
             d = (q[0] - p[0], q[1] - p[1])
             n = math.hypot(*d)
             d = (d[0] / n, d[1] / n)
-            thick_end = (p[0] + d[0] * end_len, p[1] + d[1] * end_len)
-            sh.line([p, thick_end], "outline")
-            tail = (p[0] + sx * 0.0, p[1])  # arrow shaft starts at the outer end
-            shaft_end = (tail[0] + sx * arrow_len, tail[1] + sy * arrow_len)
-            sh.line([tail, shaft_end], "outline")
+            sh.line([p, (p[0] + d[0] * end_len, p[1] + d[1] * end_len)], "outline")
+            shaft_end = (p[0] + sx * arrow_len, p[1] + sy * arrow_len)
+            sh.line([p, shaft_end], "outline")
             sh.arrow(shaft_end, (sx, sy))
-            # label beyond the arrow, offset away from the line
-            lx = shaft_end[0] + sx * 3.2
-            ly = shaft_end[1] + sy * 3.2
-            sh.text(lx, ly, label, size=FONT_LABEL, ha="center", va="center", weight="bold")
+            sh.text(shaft_end[0] + sx * CUT_LABEL_GAP, shaft_end[1] + sy * CUT_LABEL_GAP, label, size=FONT_LABEL,
+                    ha="center", va="center", weight="bold")
         # bends: short thick marks at interior vertices
         for i in range(1, len(paper) - 1):
             for nb in (paper[i - 1], paper[i + 1]):
                 d = (nb[0] - paper[i][0], nb[1] - paper[i][1])
                 n = math.hypot(*d)
-                sh.line([paper[i], (paper[i][0] + d[0] / n * 4.0, paper[i][1] + d[1] / n * 4.0)], "outline")
+                sh.line([paper[i], (paper[i][0] + d[0] / n * CUT_BEND_MARK, paper[i][1] + d[1] / n * CUT_BEND_MARK)], "outline")

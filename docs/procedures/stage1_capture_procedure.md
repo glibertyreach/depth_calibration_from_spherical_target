@@ -131,7 +131,7 @@ center point routine (3b) measures it, but it must not move afterwards.
 Figure 3. Section through the sphere mounting: adapter plate on the flange's dowel and bolts, stem with a turned shoulder seated on the adapter face, and the sphere end either threaded into the sphere's insert (ceramic spheres) or bonded into a reamed blind hole (steel spheres).
 
 1. Adapter plate (drawings SC1-01 and SC1-02). One plate per sphere, steel or aluminum, 63 mm diameter, 16 mm thick for sphere A and 22 mm for sphere B, with a 31.5 mm centering spigot 5 mm high that fits the flange's centering recess (ISO 9409-1-50-4-M6: four M6 on a 50 mm circle, one 6 mm locating pin hole on that circle, 31.5 mm H7 recess). One 6 mm dowel pin pressed into the plate engages the flange's pin hole; four counterbored holes take M6 x 16 low-head screws. The central thread for the stem is M12 for sphere A and M20 for sphere B. Have the faces, the spigot and the thread machined in one setup, so the thread is perpendicular to the stem-side face within 0.02 mm over 100 mm. Always mount the plate on its dowel; the dowel is what makes a remount land in the same place.
-2. Stem. Ground steel rod (drill rod or silver steel): 16 mm diameter for sphere A, 30 mm for sphere B. These are thicker than the earlier rule of thumb on purpose: the sphere's weight at the end of a slender stem sags by about 0.07 mm on a 12 mm stem for sphere A and 0.1 mm on a 25 mm stem for sphere B, which would change with the robot's orientation; at 16 and 30 mm the sag is 0.02 to 0.05 mm. Length from the adapter face to the sphere surface at least 2R plus 50 mm (130 mm for A, 205 mm for B; drawings SC1-03 and SC1-04). At the adapter end turn a threaded spigot (M12 x 15 mm, M20 x 25 mm) behind a shoulder at least 1.5 times the stem diameter across; the shoulder face, machined square to the stem axis in the same setup as the thread, seats on the adapter and sets the stem perpendicular. Tighten to a moderate, recorded torque; a jam nut is optional. Make a witness mark across stem and adapter so a loosened joint is visible. Finish the stem matte black (bluing or matte paint).
+2. Stem. Steel (silver steel 1.2210 or 4140 pre-hardened), turned from 25 mm bar for sphere A and 46 mm bar for sphere B, with the body ground to 16 mm h6 and 30 mm h6 after turning, so the shoulder and the ground body come from one piece. These are thicker than the earlier rule of thumb on purpose: the sphere's weight at the end of a slender stem sags by about 0.07 mm on a 12 mm stem for sphere A and 0.1 mm on a 25 mm stem for sphere B, which would change with the robot's orientation; at 16 and 30 mm the sag is 0.02 to 0.05 mm. Length from the adapter face to the sphere surface at least 2R plus 50 mm (130 mm for A, 205 mm for B; drawings SC1-03 and SC1-04). At the adapter end turn a threaded spigot (M12 x 15 mm, M20 x 25 mm) behind a shoulder at least 1.5 times the stem diameter across; the shoulder face, machined square to the stem axis in the same setup as the thread, seats on the adapter and sets the stem perpendicular. Tighten to a moderate, recorded torque; a jam nut is optional. Make a witness mark across stem and adapter so a loosened joint is visible. Finish the stem matte black (bluing or matte paint).
 3. Sphere end, ceramic spheres (preferred). Precision ceramic spheres are sold with a threaded insert (typically M6 or M8) bonded in by the maker. Turn the stem tip to a matching threaded spigot with a small shoulder that seats on the flat around the insert; add a drop of medium-strength thread locker and tighten by hand plus a quarter turn. Do not clamp the sphere in a vise; hold the stem.
 4. Sphere end, steel spheres. Bearing-grade balls (52100 "chrome steel" or 440C stainless) are through-hardened to about 60 HRC, so they cannot be tapped with ordinary tooling, and no supplier found stocks a tapped precision ball above 1.5 inch (appendix A). Do not ask a shop to tap one. Instead have a blind hole made along any radius to about 0.6 R deep (10 mm H7 x 23 mm for sphere A, drawing SC1-03) by carbide drilling or electrical discharge machining, sized for a light press fit on the stem tip (H7/p6), and bond the stem in with an anaerobic retaining compound (for example a high-strength bearing retainer). Do not weld or braze; the heat distorts the sphere. The hole does not have to be exactly radial, since the routine of 3b measures the center wherever it ends up. A tapped hole is possible only as a custom order from a ball maker, who taps before hardening.
 5. Weight. Sphere A in ceramic weighs about 0.9 kg, in steel 1.8 kg. Sphere B in steel weighs 14.5 kg and is not recommended; in alumina ceramic about 7 kg; a precision-turned aluminum sphere with a matte hard-anodized surface weighs about 5 kg and is the practical choice. Have the shop that turns it cut the M20 thread for the stem into the sphere in the same setup, as a blind tapped hole M20 x 30 mm with a 32 mm spot face at the pole (drawing SC1-04); the sphere then arrives tapped by construction and the stem design of item 2 is used unchanged. Specify sphericity 0.02 mm or better (the same as for sphere A, section 1d) and measure the diameter and roundness in-house after hard anodizing, which adds about 0.025 to 0.05 mm to the radius. The diameter must be known to 0.025 mm; aluminum grows 0.0035 mm in diameter per degree C at this size, so measure at the session's room temperature or record the temperature and correct. A hollow sphere (two spun hemispheres welded and finish-turned) is lighter still, but its wall must be thick enough to turn true; 6 mm is a reasonable minimum. Check the robot's payload rating against the sphere, stem and adapter together.
@@ -573,3 +573,44 @@ C.7 If something goes wrong.
 - "python3 is not recognized" on Windows: type `python` instead; if that also fails, redo C.1.
 - "pip install" fails with a network or certificate error: the computer's internet access is blocked; ask the engineer for the package files or for the proxy settings.
 - A traceback (many lines ending in an exception name) from any tool is a software fault, not an input fault: save the whole output and the input files and send them to the engineer.
+
+## Appendix D. Shop drawings
+
+The six drawings below are the ones to build from. Each shows a plan view and an elevation in section, with every feature dimensioned and toleranced, the material, the finish and the quantity. The flange interface on SC1-01, SC1-02 and SC1-05 follows ISO 9409-1-50-4-M6 (ISO 9409-1:1996, table 1: 50 mm pitch circle, 31.5 mm H7 centering recess, four M6, one 6 mm H7 pin hole on the pitch circle at +Xm); confirm it against the chosen robot's flange drawing before machining. The rigid sensor mount is built from the existing drawing from previous work and is not repeated here. The run-out fixture needs no drawing (section 1e).
+
+The drawings are generated by scripts in `docs/procedures/drawings/` (regenerate all six with `python3 docs/procedures/drawings/make_all.py`); the PNG files there print at full size and are the copies to send to the shop.
+
+| Drawing | Part | Quantity | File |
+|---|---|---|---|
+| SC1-01 | Adapter plate, sphere A | 1 | `SC1-01_adapter_plate_sphere_A.png` |
+| SC1-02 | Adapter plate, sphere B | 1 | `SC1-02_adapter_plate_sphere_B.png` |
+| SC1-03 | Stem, sphere A, with the hole detail for a steel sphere A | 1 | `SC1-03_stem_sphere_A.png` |
+| SC1-04 | Stem, sphere B, with the interface detail for sphere B | 1 | `SC1-04_stem_sphere_B.png` |
+| SC1-05 | Board adapter, with the board outline | 1 | `SC1-05_board_adapter.png` |
+| SC1-06 | Three-ball nest base | 1 | `SC1-06_three_ball_nest_base.png` |
+
+Points for the machine shop to confirm: the DIN 76 thread undercuts and lead chamfers on SC1-03 and SC1-04; on SC1-02, the 47 mm spot face overlaps the screw counterbores, so the four flange screws are fitted before the stem; on SC1-05, the pin and pad positions carry the general tolerance ISO 2768-mK, which is enough because the board's position within its own plane does not affect the calibration.
+
+![SC1-01](drawings/SC1-01_adapter_plate_sphere_A.png)
+
+Drawing SC1-01. Adapter plate, sphere A.
+
+![SC1-02](drawings/SC1-02_adapter_plate_sphere_B.png)
+
+Drawing SC1-02. Adapter plate, sphere B.
+
+![SC1-03](drawings/SC1-03_stem_sphere_A.png)
+
+Drawing SC1-03. Stem, sphere A.
+
+![SC1-04](drawings/SC1-04_stem_sphere_B.png)
+
+Drawing SC1-04. Stem, sphere B.
+
+![SC1-05](drawings/SC1-05_board_adapter.png)
+
+Drawing SC1-05. Board adapter.
+
+![SC1-06](drawings/SC1-06_three_ball_nest_base.png)
+
+Drawing SC1-06. Three-ball nest base.
