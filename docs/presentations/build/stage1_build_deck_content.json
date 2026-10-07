@@ -229,7 +229,7 @@
           [
             "Material",
             "Bearing-grade steel (52100 or 440C, grade 25 or better) or ceramic",
-            "Turned aluminum (6061-T6), solid or hollow with 6 mm wall"
+            "Turned aluminum (6061-T6), solid or hollow with at least 6 mm wall; ceramic as an alternative"
           ],
           [
             "Surface",
@@ -324,7 +324,7 @@
             "Hardened balls cannot be tapped",
             "Steel ball: drilled or EDM blind hole, bonded stem",
             "Aluminum sphere B: thread cut when it is turned",
-            "No pre-tapped precision sphere exists above 1.5 inch"
+            "None found stocked above 1.5 inch; custom order only"
           ]
         }
       ],
@@ -350,7 +350,7 @@
           [
             "Matte reference spheres, stock",
             "MetrologyWorks; Rothbucher RSLB10M (Baseline Equipment)",
-            "MetrologyWorks up to 1.5 inch; Rothbucher 145 mm, sphericity 0.3 mm"
+            "MetrologyWorks: smaller sphere A only. Rothbucher: provisional far-range B only."
           ],
           [
             "Board plate",
@@ -380,7 +380,7 @@
         ]
       },
       "caption": "From suppliers' web pages, October 2026; not an endorsement. Confirm size, finish, measurement and thread before ordering.",
-      "notes": "This list is appendix A of the procedure in brief. No supplier was found that stocks a precision sphere of the needed sizes with a mounting hole, so the spheres are either made to order or built from a bearing ball by a machine shop. The laser-scanner reference spheres sold in the right sizes generally have form errors of 0.5 to 2 mm, far too coarse; the Rothbucher sphere is the best specified of them. The finished diameters are measured in-house with outside micrometers, which is cheaper than buying certified spheres and is what the calibration actually needs."
+      "notes": "This list is appendix A of the procedure in brief. No supplier was found that stocks a precision sphere of the needed sizes with a mounting hole, so the spheres are either made to order or built from a bearing ball by a machine shop. The laser-scanner reference spheres sold in the right sizes generally have form errors of 0.5 to 2 mm, far too coarse; the Rothbucher sphere is the best specified of them. Appendix A limits both stock items: MetrologyWorks spheres (up to 1.5 inch) only if the engineer accepts a smaller sphere A, and the Rothbucher sphere only as a provisional far-range sphere B, measured in-house first; it is not adequate as sphere A or as the final sphere B. The finished diameters are measured in-house with outside micrometers, which is cheaper than buying certified spheres and is what the calibration actually needs."
     },
     {
       "id": "runout",
@@ -398,7 +398,7 @@
         },
         {
           "head": "Steel base plate",
-          "text": "About 150 x 100 x 12 mm, bolted to the cell table with two M8 screws, so the base holds on any table and does not creep"
+          "text": "About 150 x 100 x 12 mm, bolted to the cell table with two M8 screws, so the base holds on a non-magnetic table and does not creep"
         },
         {
           "head": "Placement",
@@ -476,7 +476,7 @@
         "Bolted to the table where the robot reaches with the wrist down and tilted about 40 degrees to either side",
         "Used once per sphere at setup, and after any remount of an adapter or stem"
       ],
-      "notes": "A sphere resting on three fixed balls always has its center at the same point in space, whatever direction its stem points. That is what lets the robot's own multi-orientation routine find the sphere's center as its tool center point, which deck 2 describes. The nest is simple to make: a steel base with three pockets, the balls pressed in, and holes to bolt it down. Its position matters only in that the robot must be able to seat the sphere from several directions. The dimensioned shop drawings are in appendix D of the stage-1 procedure, and as PNG files in docs/procedures/drawings/ of the repository: SC1-01 and SC1-02 adapter plates, SC1-03 and SC1-04 stems with the sphere interfaces, SC1-05 board adapter, SC1-06 nest base. "
+      "notes": "A sphere resting on three fixed balls always has its center at the same point in space, whatever direction its stem points. That is what lets the robot's own multi-orientation routine find the sphere's center as its tool center point, which deck 2 describes. The nest is simple to make: a steel base with three pockets, the balls bonded in, and holes to bolt it down. Its position matters only in that the robot must be able to seat the sphere from several directions. The dimensioned shop drawings are in appendix D of the stage-1 procedure, and as PNG files in docs/procedures/drawings/ of the repository: SC1-01 and SC1-02 adapter plates, SC1-03 and SC1-04 stems with the sphere interfaces, SC1-05 board adapter, SC1-06 nest base. "
     },
     {
       "id": "acceptance",

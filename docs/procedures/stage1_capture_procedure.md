@@ -244,7 +244,7 @@ pose_id, kind, radius_mm, half_width_mm, half_height_mm, x_mm, y_mm, z_mm, rotat
 - `radius_mm`: the measured radius for a sphere, half the diameter measured after the matte finish (nominally 38.10 for sphere A, 76.20 for sphere B), empty for a board.
 - `half_width_mm`, `half_height_mm`: half the measured board size, empty for a sphere.
 - `x_mm`, `y_mm`, `z_mm`: the reported TCP position in the base frame.
-- `rotation_type` and `r1..r4`: the reported tool orientation, in whatever form the controller gives, named by one of: `quaternion_wxyz`, `quaternion_xyzw`, `euler_zyx_deg` (KUKA A, B, C), `fixed_xyz_deg` (FANUC W, P, R), `euler_xyz_deg`, `rotvec_deg`, or `none` for a sphere (its orientation does not matter). Fill unused r columns with nothing.
+- `rotation_type` and `r1..r4`: the reported tool orientation, in whatever form the controller gives, named by one of: `quaternion_wxyz`, `quaternion_xyzw`, `euler_zyx_deg` (KUKA A, B, C), `fixed_xyz_deg` (FANUC W, P, R), `euler_xyz_deg`, `rotvec_deg`, `matrix` (nine numbers, the rotation matrix row by row), or `none` for a sphere (its orientation does not matter). When the `matrix` form is used, the r columns run to `r9` (`r1..r9`). Fill unused r columns with nothing.
 
 Example lines:
 
