@@ -204,12 +204,17 @@ const FIXTURES = {
 	textPt: BODY_MIN_PT,
 };
 
+// Shared by every table slide (cost, suppliers, build_list, buy_list, sphere_spec, plate_spec).
+const TABLE_HEAD_H = 0.5; // header row height
+const TABLE_CELL_MARGIN = [0.05, 0.12, 0.05, 0.12]; // cell margins: top, right, bottom, left (inches)
+const TABLE_ROW_LINE_FACTOR = BODY_LINE_FACTOR; // row height per text line, as a multiple of the font size
+const TABLE_FIT_TOLERANCE = 0.01; // inches of slack before a table that is taller than its box is reported
+const TABLE_CAPTION_GAP = GAP; // gap between a table (or its visual) and the caption under it
+
 const COST = {
-	tableW: 7.4, // table width
-	colW: [5.0, 2.4], // table column widths
+	tableW: 7.9, // table width
+	colW: [5.6, 2.3], // table column widths (sum to tableW)
 	cellPt: BODY_MIN_PT,
-	cellMargin: [0.04, 0.12, 0.04, 0.12], // cell margins: top, right, bottom, left (inches)
-	captionH: 0.3, // caption height (one line)
 	statValuePt: STAT_PRICE_PT,
 	statValueH: 0.6, // stat value line height
 	statLabelH: 0.6, // stat label height (two lines)
@@ -254,12 +259,10 @@ const BOARD = {
 };
 
 const BOARD_BUILD = {
-	captionH: CAPTION_TWO_LINE_H, // caption under the figure (two lines at CAPTION_PT)
 	iconD: ICON_BADGE_D,
 	headPt: CARD_HEAD_PT,
 	textPt: BODY_MIN_PT,
 	cardPad: GAP_TIGHT, // padding inside each of the four cards (tighter than CARD_PAD so four cards fit)
-	headH: 0.35, // card head height (one line)
 };
 
 // Three-ball nest diagram (native shapes). Dimensions in inches, true to scale with each other:
@@ -294,11 +297,45 @@ const NEST = {
 };
 
 const SUPPLIERS = {
-	colW: [3.1, 5.2, 4.03], // Item, Candidate suppliers, Notes (sums to CONTENT_W)
+	colW: [3.1, 5.2, 4.033], // Item, Candidate suppliers, Notes (sums to CONTENT_W)
 	cellPt: BODY_MIN_PT, // 14 pt fits; the table never goes below it
-	headH: 0.5, // header row height
-	cellMargin: [0.05, 0.12, 0.05, 0.12], // top, right, bottom, left (inches)
-	captionH: CAPTION_LINE_H,
+};
+
+// "What must be built": table on the left, a tint card with a large toolbox icon on the right.
+const BUILD_LIST = {
+	colW: [5.2, 1.2, 2.6], // Item, Quantity, Drawing
+	cellPt: BODY_MIN_PT,
+	iconD: 1.6, // large teal icon circle in the visual card
+};
+
+// "What must be bought": the full content width; the cost column is right-aligned.
+const BUY_LIST = {
+	colW: [5.0, 5.3, 2.033], // Item, Purpose, Estimated cost (sums to CONTENT_W)
+	cellPt: BODY_MIN_PT,
+};
+
+// Sphere purchase specification: long text, full content width, requirement column in bold.
+const SPHERE_SPEC = {
+	colW: [2.3, 5.4, 4.633], // Requirement, Sphere A, Sphere B (sums to CONTENT_W)
+	cellPt: BODY_MIN_PT,
+};
+
+// Plate purchase specification: table on the left, a native-shape drawing of the plate on the right.
+const PLATE_SPEC = {
+	colW: [1.7, 6.7], // Requirement, Flat plate
+	cellPt: BODY_MIN_PT,
+	scale: 0.015, // drawing scale in inches per mm (the 200 x 150 mm plate is drawn 3.0 x 2.25 in)
+	plateWmm: 200, // plate width in the drawing (mm; the long edge)
+	plateHmm: 150, // plate height in the drawing (mm; the short edge)
+	outlinePt: 1.5, // outline weight of the plate
+	edgePt: 5, // weight of the two highlighted locating edges
+	padD: 0.22, // diameter of a support-pad circle
+	padInsetX: 0.28, // pad center distance from the plate's left/right edge, as a fraction of the plate width
+	padInsetY: 0.25, // pad center distance from the plate's top/bottom edge, as a fraction of the plate height
+	legendPt: BODY_MIN_PT, // legend text
+	legendH: 0.35, // legend row height
+	legendKeyW: 0.5, // length of a legend key (a short line, or a pad circle centered in the same width)
+	legendGap: GAP_TIGHT, // gap between legend rows and between the drawing and the legend
 };
 
 const ACCEPTANCE = {
@@ -375,6 +412,21 @@ const ROBOT_PROGRAM = {
 	messageH: 1.0,
 };
 
+// Preparation slide: three columns of icon + head + bullets over the boxed message (same helper as robot_program).
+const PREP = {
+	bulletPt: BODY_MIN_PT, // three narrow columns with up to five bullets: 14 pt keeps every column inside its card
+	paraSpacePt: PARA_SPACE_PT,
+	messageH: 0.9, // message box height (the message runs one or two lines)
+};
+
+// Run-out fixture slide: the board figure at the left, four icon cards at the right (same composition as board_build).
+const RUNOUT = {
+	iconD: ICON_BADGE_D,
+	headPt: CARD_HEAD_PT,
+	textPt: BODY_MIN_PT,
+	cardPad: GAP_TIGHT, // padding inside each of the four cards
+};
+
 const SPOILERS = {
 	columns: 2,
 	rowsFirstColumn: 4, // 4 + 3 items
@@ -397,6 +449,8 @@ const EXTRA_LABELS = {
 	sensor: "Sensor", // bootstrap diagram
 	sideView: "Side view", // nest diagram
 	topView: "Top view", // nest diagram
+	locatingEdges: "Locating edges", // plate drawing legend (the two edges that rest on the adapter's edge pins)
+	supportPads: "Support pads", // plate drawing legend (the adapter's three support pads)
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -497,6 +551,12 @@ async function buildDeck(contentJson, outputPptx) {
 		robot: fa.FaRobot,
 		clipboardCheck: fa.FaClipboardCheck,
 		paint: fa.FaPaintRoller,
+		toolbox: fa.FaToolbox,
+		gauge: fa.FaTachometerAlt,
+		magnet: fa.FaMagnet,
+		layers: fa.FaLayerGroup,
+		crosshairs: fa.FaCrosshairs,
+		layout: fa.FaThLarge, // cell layout (the "layout" icon key of the prep slide)
 	};
 	const iconWhite = {};
 	for (const [key, comp] of Object.entries(iconSources)) iconWhite[key] = await renderIcon(comp, WHITE_HEX);
@@ -653,6 +713,46 @@ async function buildDeck(contentJson, outputPptx) {
 		return y - (o.gap === undefined ? GAP_TIGHT : o.gap);
 	}
 
+	/** Height of a caption of the given width: one line or two, by the text-width model. */
+	function captionHeightFor(str, widthIn) {
+		return countLines(str, widthIn, CAPTION_PT) === 1 ? CAPTION_LINE_H : CAPTION_TWO_LINE_H;
+	}
+
+	/**
+	 * Space of a table slide: the caption sits at the bottom of the content area, and the table (and any
+	 * visual next to it) fills the rest down to TABLE_CAPTION_GAP above the caption.
+	 */
+	function tableArea(captionStr) {
+		const captionH = captionHeightFor(captionStr, CONTENT_W);
+		const captionY = CONTENT_BOTTOM - captionH;
+		return { captionY, captionH, tableH: captionY - TABLE_CAPTION_GAP - CONTENT_TOP };
+	}
+
+	/**
+	 * Table with a dark header row and banded body rows, filling the height h from y. Rows are equally tall
+	 * unless a row's text needs more (by the text-width model); a table that cannot fit in h is reported.
+	 * o: name, x, y, h, colW[], cellPt, colAlign[], colBold[], colColor[] (scheme colors, default text1)
+	 */
+	function dataTable(slide, s, o) {
+		const [mTop, mRight, mBottom, mLeft] = TABLE_CELL_MARGIN;
+		const w = o.colW.reduce((a, b) => a + b, 0);
+		const headCell = (str, ci) => ({ text: glue(str), options: { bold: true, color: C.background1, fill: { color: C.text2 }, align: o.colAlign[ci], valign: "middle", fontSize: o.cellPt, margin: TABLE_CELL_MARGIN } });
+		const rows = [s.table.header.map(headCell)];
+		s.table.rows.forEach((r, i) => {
+			const base = { fill: { color: i % 2 === 0 ? C.background1 : C.background2 }, valign: "middle", fontSize: o.cellPt, margin: TABLE_CELL_MARGIN };
+			rows.push(r.map((cellText, ci) => ({ text: glue(cellText), options: Object.assign({ align: o.colAlign[ci], bold: o.colBold[ci], color: o.colColor[ci] || C.text1 }, base) })));
+		});
+		const evenH = (o.h - TABLE_HEAD_H) / s.table.rows.length;
+		const rowHs = s.table.rows.map((r) => {
+			const lines = Math.max(...r.map((cellText, ci) => countLines(glue(cellText), o.colW[ci] - mLeft - mRight, o.cellPt, o.colBold[ci])));
+			return Math.max(evenH, (lines * o.cellPt * TABLE_ROW_LINE_FACTOR) / 72 + mTop + mBottom);
+		});
+		const totalH = TABLE_HEAD_H + rowHs.reduce((a, b) => a + b, 0);
+		if (totalH > o.h + TABLE_FIT_TOLERANCE) console.warn(`WARNING: ${o.name} needs ${totalH.toFixed(2)} in but has ${o.h.toFixed(2)} in`);
+		slide.addTable(rows, { x: o.x, y: o.y, w, colW: o.colW, rowH: [TABLE_HEAD_H].concat(rowHs), border: { type: "solid", pt: TABLE_BORDER_PT, color: C.accent6 }, objectName: o.name });
+		return { w, h: Math.max(o.h, totalH) };
+	}
+
 	// ---- Slide builders ----------------------------------------------------------------------
 	const builders = {};
 
@@ -761,23 +861,86 @@ async function buildDeck(contentJson, outputPptx) {
 	builders.cost = (slide, s) => {
 		title(slide, s.title);
 		const c = COST;
-		const headCell = (t, align) => ({ text: glue(t), options: { bold: true, color: C.background1, fill: { color: C.text2 }, align, valign: "middle", fontSize: c.cellPt, margin: c.cellMargin } });
-		const rows = [[headCell(s.table.header[0], "left"), headCell(s.table.header[1], "right")]];
-		s.table.rows.forEach((r, i) => {
-			const fill = { color: i % 2 === 0 ? C.background1 : C.background2 };
-			const base = { fill, color: C.text1, valign: "middle", fontSize: c.cellPt, margin: c.cellMargin };
-			rows.push([{ text: glue(r[0]), options: Object.assign({ align: "left" }, base) }, { text: glue(r[1]), options: Object.assign({ align: "right", bold: true }, base) }]);
-		});
-		const captionY = CONTENT_BOTTOM - c.captionH;
-		const statsH = captionY - GAP - CONTENT_TOP; // the table and the stat column share this height
-		slide.addTable(rows, { x: CONTENT_X, y: CONTENT_TOP, w: c.tableW, colW: c.colW, rowH: statsH / rows.length, border: { type: "solid", pt: TABLE_BORDER_PT, color: C.accent6 }, objectName: "Cost table" });
+		const area = tableArea(s.caption);
+		const table = dataTable(slide, s, { name: "Cost table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: c.colW, cellPt: c.cellPt, colAlign: ["left", "right"], colBold: [false, true], colColor: [] });
 		const rx = CONTENT_X + c.tableW + GAP;
 		const rw = CONTENT_W - c.tableW - GAP;
-		const cardH = (statsH - GAP) / s.stats.length;
+		const cardH = (table.h - (s.stats.length - 1) * STACK_GAP) / s.stats.length; // the stat cards share the table's height
 		s.stats.forEach((st, i) => {
-			statCard(slide, `Total ${i + 1}`, st, rx, CONTENT_TOP + i * (cardH + GAP), rw, cardH, c.statValuePt, c.statValueH, c.statLabelH);
+			statCard(slide, `Total ${i + 1}`, st, rx, CONTENT_TOP + i * (cardH + STACK_GAP), rw, cardH, c.statValuePt, c.statValueH, c.statLabelH);
 		});
-		text(slide, "Cost caption", s.caption, CONTENT_X, captionY, CONTENT_W, c.captionH, { fontSize: CAPTION_PT, color: C.accent5, valign: "bottom" });
+		caption(slide, "Cost caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
+	};
+
+	builders.build_list = (slide, s) => {
+		title(slide, s.title);
+		const t = BUILD_LIST;
+		const area = tableArea(s.caption);
+		const table = dataTable(slide, s, { name: "Build list table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left", "left"], colBold: [false, false, false], colColor: [] });
+		// Visual: a tint card over the table's height with a large teal toolbox circle in its middle
+		const vx = CONTENT_X + table.w + GAP;
+		const vw = CONTENT_X + CONTENT_W - vx;
+		card(slide, "Visual card", vx, CONTENT_TOP, vw, table.h);
+		iconBadge(slide, "Toolbox icon", "toolbox", vx + (vw - t.iconD) / 2, CONTENT_TOP + (table.h - t.iconD) / 2, t.iconD, C.accent2);
+		caption(slide, "Build list caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
+	};
+
+	builders.buy_list = (slide, s) => {
+		title(slide, s.title);
+		const t = BUY_LIST;
+		const area = tableArea(s.caption);
+		dataTable(slide, s, { name: "Buy list table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left", "right"], colBold: [false, false, true], colColor: [] });
+		caption(slide, "Buy list caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
+	};
+
+	builders.sphere_spec = (slide, s) => {
+		title(slide, s.title);
+		const t = SPHERE_SPEC;
+		const area = tableArea(s.caption);
+		dataTable(slide, s, { name: "Sphere specification table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left", "left"], colBold: [true, false, false], colColor: [C.text2] });
+		caption(slide, "Sphere specification caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
+	};
+
+	builders.plate_spec = (slide, s) => {
+		title(slide, s.title);
+		const t = PLATE_SPEC;
+		const area = tableArea(s.caption);
+		const table = dataTable(slide, s, { name: "Plate specification table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left"], colBold: [true, false], colColor: [C.text2] });
+		// Visual: the plate drawn to scale in a white card, its two locating edges in orange, the three support pads as circles
+		const vx = CONTENT_X + table.w + GAP;
+		const vw = CONTENT_X + CONTENT_W - vx;
+		card(slide, "Plate drawing card", vx, CONTENT_TOP, vw, table.h, "white");
+		const pw = t.plateWmm * t.scale;
+		const ph = t.plateHmm * t.scale;
+		const legendH = 2 * t.legendH + t.legendGap;
+		const blockH = ph + t.legendGap + legendH;
+		const px = vx + (vw - pw) / 2;
+		const py = CONTENT_TOP + (table.h - blockH) / 2;
+		slide.addShape(R.rect, { x: px, y: py, w: pw, h: ph, fill: { color: C.background2 }, line: { color: C.accent5, width: t.outlinePt }, objectName: "Plate outline" });
+		// Locating edges (bottom long edge and left short edge), drawn on top of the outline
+		slide.addShape(R.line, { x: px, y: py + ph, w: pw, h: 0, line: { color: C.accent1, width: t.edgePt }, objectName: "Plate bottom edge (locating)" });
+		slide.addShape(R.line, { x: px, y: py, w: 0, h: ph, line: { color: C.accent1, width: t.edgePt }, objectName: "Plate left edge (locating)" });
+		// Three support pads: two near the top corners and one near the bottom middle
+		const pads = [
+			[t.padInsetX, t.padInsetY],
+			[1 - t.padInsetX, t.padInsetY],
+			[0.5, 1 - t.padInsetY],
+		];
+		pads.forEach(([fx, fy], i) => {
+			slide.addShape(R.ellipse, { x: px + fx * pw - t.padD / 2, y: py + fy * ph - t.padD / 2, w: t.padD, h: t.padD, fill: { color: C.accent2 }, line: { type: "none" }, objectName: `Support pad ${i + 1}` });
+		});
+		// Legend under the drawing: key on the left, label on the right, as one block centered in the card
+		const legend = [
+			{ label: EXTRA_LABELS.locatingEdges, key: (kx, ky) => slide.addShape(R.line, { x: kx, y: ky, w: t.legendKeyW, h: 0, line: { color: C.accent1, width: t.edgePt }, objectName: "Legend key locating edges" }) },
+			{ label: EXTRA_LABELS.supportPads, key: (kx, ky) => slide.addShape(R.ellipse, { x: kx + (t.legendKeyW - t.padD) / 2, y: ky - t.padD / 2, w: t.padD, h: t.padD, fill: { color: C.accent2 }, line: { type: "none" }, objectName: "Legend key support pads" }) },
+		];
+		const ly0 = py + ph + t.legendGap;
+		legend.forEach((it, i) => {
+			const ly = ly0 + i * (t.legendH + t.legendGap);
+			it.key(px, ly + t.legendH / 2);
+			text(slide, `Legend ${it.label}`, it.label, px + t.legendKeyW + GAP_TIGHT, ly, pw - t.legendKeyW - GAP_TIGHT, t.legendH, { fontSize: t.legendPt, valign: "middle" });
+		});
+		caption(slide, "Plate specification caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
 	};
 
 	builders.spheres = (slide, s) => {
@@ -829,26 +992,38 @@ async function buildDeck(contentJson, outputPptx) {
 		caption(slide, "Figure caption", s.caption, CONTENT_X, CONTENT_BOTTOM - CAPTION_LINE_H, CONTENT_W, CAPTION_LINE_H, { valign: "bottom" });
 	};
 
-	builders.board_build = (slide, s) => {
-		title(slide, s.title);
-		const b = BOARD_BUILD;
-		// Figure at the largest size that leaves room for its caption underneath
-		const imgBoxH = CONTENT_H - CAPTION_GAP - b.captionH;
+	/**
+	 * The board figure at the largest size that leaves room for its caption, with four icon cards stacked to its right.
+	 * o: sizes (iconD, headPt, textPt, cardPad), icons[], figureName, partName
+	 */
+	function figureWithCards(slide, s, o) {
+		const d = o.sizes;
+		const imgBoxH = CONTENT_H - CAPTION_GAP - CAPTION_TWO_LINE_H;
 		const info = imageInfo[s.image];
-		const img = framedImage(slide, "Board on its adapter", s.image, CONTENT_X, CONTENT_TOP, imgBoxH * (info.w / info.h), imgBoxH, "left");
-		caption(slide, "Figure caption", s.caption, CONTENT_X, img.y + img.h + CAPTION_GAP, img.w, b.captionH);
+		const img = framedImage(slide, o.figureName, s.image, CONTENT_X, CONTENT_TOP, imgBoxH * (info.w / info.h), imgBoxH, "left");
+		caption(slide, "Figure caption", s.caption, CONTENT_X, img.y + img.h + CAPTION_GAP, img.w, CAPTION_TWO_LINE_H);
 		const rx = CONTENT_X + img.w + GAP;
 		const rw = CONTENT_X + CONTENT_W - rx;
 		const cardH = (CONTENT_H - (s.cards.length - 1) * STACK_GAP) / s.cards.length;
-		const icons = ["board", "paint", "ruler", "wrench"];
 		s.cards.forEach((c, i) => {
 			const y = CONTENT_TOP + i * (cardH + STACK_GAP);
-			card(slide, `Board part ${i + 1} card`, rx, y, rw, cardH);
-			iconBadge(slide, `Board part ${i + 1} icon`, icons[i], rx + CARD_PAD, y + (cardH - b.iconD) / 2, b.iconD, C.accent2);
-			const tx = rx + CARD_PAD + b.iconD + GAP_TIGHT;
+			card(slide, `${o.partName} ${i + 1} card`, rx, y, rw, cardH);
+			iconBadge(slide, `${o.partName} ${i + 1} icon`, o.icons[i], rx + CARD_PAD, y + (cardH - d.iconD) / 2, d.iconD, C.accent2);
+			const tx = rx + CARD_PAD + d.iconD + GAP_TIGHT;
 			const tw = rx + rw - CARD_PAD - tx;
-			text(slide, `Board part ${i + 1} text`, [{ text: c.head, options: { fontSize: b.headPt, bold: true, color: C.text2, breakLine: true } }, { text: c.text, options: { fontSize: b.textPt } }], tx, y + b.cardPad, tw, cardH - 2 * b.cardPad, { valign: "middle" });
+			text(slide, `${o.partName} ${i + 1} text`, [{ text: c.head, options: { fontSize: d.headPt, bold: true, color: C.text2, breakLine: true } }, { text: c.text, options: { fontSize: d.textPt } }], tx, y + d.cardPad, tw, cardH - 2 * d.cardPad, { valign: "middle" });
 		});
+	}
+
+	builders.board_build = (slide, s) => {
+		title(slide, s.title);
+		const b = BOARD_BUILD;
+		figureWithCards(slide, s, { sizes: b, icons: ["board", "paint", "ruler", "wrench"], figureName: "Board on its adapter", partName: "Board part" });
+	};
+
+	builders.runout = (slide, s) => {
+		title(slide, s.title);
+		figureWithCards(slide, s, { sizes: RUNOUT, icons: ["gauge", "magnet", "layers", "crosshairs"], figureName: "Run-out check on the board", partName: "Run-out part" });
 	};
 
 	builders.nest_build = (slide, s) => {
@@ -908,17 +1083,9 @@ async function buildDeck(contentJson, outputPptx) {
 	builders.suppliers = (slide, s) => {
 		title(slide, s.title);
 		const t = SUPPLIERS;
-		const headCell = (str) => ({ text: glue(str), options: { bold: true, color: C.background1, fill: { color: C.text2 }, align: "left", valign: "middle", fontSize: t.cellPt, margin: t.cellMargin } });
-		const rows = [s.table.header.map(headCell)];
-		s.table.rows.forEach((r, i) => {
-			const base = { fill: { color: i % 2 === 0 ? C.background1 : C.background2 }, color: C.text1, align: "left", valign: "middle", fontSize: t.cellPt, margin: t.cellMargin };
-			rows.push(r.map((cellText, ci) => ({ text: glue(cellText), options: Object.assign({ bold: ci === 0, color: ci === 0 ? C.text2 : C.text1 }, base) })));
-		});
-		const captionY = CONTENT_BOTTOM - t.captionH;
-		const tableH = captionY - GAP - CONTENT_TOP;
-		const bodyRowH = (tableH - t.headH) / s.table.rows.length;
-		slide.addTable(rows, { x: CONTENT_X, y: CONTENT_TOP, w: CONTENT_W, colW: t.colW, rowH: [t.headH].concat(s.table.rows.map(() => bodyRowH)), border: { type: "solid", pt: TABLE_BORDER_PT, color: C.accent6 }, objectName: "Suppliers table" });
-		caption(slide, "Suppliers caption", s.caption, CONTENT_X, captionY, CONTENT_W, t.captionH, { valign: "bottom" });
+		const area = tableArea(s.caption);
+		dataTable(slide, s, { name: "Suppliers table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left", "left"], colBold: [true, false, false], colColor: [C.text2] });
+		caption(slide, "Suppliers caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
 	};
 
 	builders.acceptance = (slide, s) => {
@@ -1151,6 +1318,13 @@ async function buildDeck(contentJson, outputPptx) {
 		const r = ROBOT_PROGRAM;
 		// Like the loop slide's message box: tint fill, orange outline, orange icon circle
 		columnsWithMessage(slide, s, { sizes: COLUMNS_MESSAGE, bulletPt: r.bulletPt, paraSpacePt: r.paraSpacePt, messageH: r.messageH, boxFill: C.background2, boxLine: C.accent1, boxIcon: "robot", boxIconFill: C.accent1 });
+	};
+
+	builders.prep = (slide, s) => {
+		title(slide, s.title);
+		const r = PREP;
+		// Same helper and box as robot_program: tint fill, orange outline, orange icon circle
+		columnsWithMessage(slide, s, { sizes: COLUMNS_MESSAGE, bulletPt: r.bulletPt, paraSpacePt: r.paraSpacePt, messageH: r.messageH, boxFill: C.background2, boxLine: C.accent1, boxIcon: "tool", boxIconFill: C.accent1 });
 	};
 
 	builders.spoilers = (slide, s) => {
