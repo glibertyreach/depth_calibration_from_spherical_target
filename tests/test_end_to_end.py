@@ -40,8 +40,11 @@ TEST_SENSOR_TO_POSITIONER = RigidTransform.from_rotation_vector_degrees([3.0, -2
 N_SPHERE_POSES = 36
 N_BOARD_POSES = 10
 FRAMES_PER_POSE = 3
-DEPTH_RANGE_MM = (350.0, 900.0)
-SPHERE_RADII_MM = (40.0, 80.0)
+DEPTH_RANGE_MM = (300.0, 1100.0)
+"""The working volume of the one-sphere plan."""
+SPHERE_RADIUS_MM = 76.2
+"""The single calibration sphere (decision D-15). The scaled camera has the same field of view as the full one
+(only the pixel counts are divided by 4), so the same radius has the same apparent size in the image."""
 BOARD_HALF_SIZE_MM = (120.0, 90.0)
 HOLDOUT_FRACTION = 0.25
 MAX_HOLDOUT_RMS_RATIO_AFTER_TO_BEFORE = 0.5
@@ -65,7 +68,7 @@ def make_poses(rng: np.random.Generator):
         y = rng.uniform(-0.7, 0.7) * z * np.tan(np.radians(half_v))
         center_sensor = np.array([x, y, z])
         if index < N_SPHERE_POSES:
-            radius = SPHERE_RADII_MM[index % 2]
+            radius = SPHERE_RADIUS_MM
             center_positioner = TEST_SENSOR_TO_POSITIONER.apply_points(center_sensor)
             poses.append(("sphere", radius, RigidTransform(np.eye(3), center_positioner)))
         else:
@@ -206,9 +209,8 @@ def test_sample_curvature_input_is_measurement_space_and_map_stores_the_camera(f
     assert on_sphere.any() and (~on_sphere).any()
     assert np.all(samples.inputs[~on_sphere, 5] == 0.0)
     physical = samples.inputs[on_sphere, 5] * (TEST_CAMERA.mean_focal_px / samples.inputs[on_sphere, 2]) ** 2
-    # Only the two sphere radii of the dataset occur, as curvatures 1/40 and 1/80.
-    nearest = np.minimum(np.abs(physical - 1.0 / SPHERE_RADII_MM[0]), np.abs(physical - 1.0 / SPHERE_RADII_MM[1]))
-    assert nearest.max() < 1.0e-12
+    # Only the one sphere radius of the dataset occurs, as the curvature 1/76.2.
+    assert np.abs(physical - 1.0 / SPHERE_RADIUS_MM).max() < 1.0e-12
     document = result.model.to_dict()
     assert document["camera"]["fx"] == TEST_CAMERA.focal_x_px and document["camera"]["fy"] == TEST_CAMERA.focal_y_px
     assert document["inputs"][5]["unit"].startswith("mm/px^2")
