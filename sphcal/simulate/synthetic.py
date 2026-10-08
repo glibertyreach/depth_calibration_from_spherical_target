@@ -3,7 +3,10 @@ Synthetic captures of spheres and boards with a known injected range error.
 
 Purpose: test the fitting code end to end. The injected error is a known
 function of the map inputs (u, v, rho, s_u, s_v, curvature) of the design
-document (section 4), so a correct fit must recover it. The generator also
+document (section 4), so a correct fit must recover it. The "curvature" given
+to the injected field is the PHYSICAL curvature 1/R (0 on boards); the map's
+sixth input is the measurement-space curvature (range / f)^2 / R, so the map
+recovers the injected curvature term through its range axis. The generator also
 imitates the main gross features of the real sensor (effective resolution
 coarser than the pixel grid, depth noise growing with depth squared and with
 incidence, no-reads at grazing incidence, an optional fixed pattern) so that

@@ -202,7 +202,7 @@ def test_json_document_structure(tmp_path):
     assert len(term["knots"]) == 2 and len(term["coefficients"]) == model.terms[1].n_coefficients
 
 
-def test_json_rejects_foreign_documents_and_mixed_degrees(tmp_path):
+def test_json_rejects_foreign_documents(tmp_path):
     with pytest.raises(ValueError):
         SumOfTermsSpline.from_dict({"format": "something-else", "version": FORMAT_VERSION})
     with pytest.raises(ValueError):
@@ -211,8 +211,38 @@ def test_json_rejects_foreign_documents_and_mixed_degrees(tmp_path):
     model.coefficients[0] = np.nan
     with pytest.raises(ValueError):
         model.to_json(tmp_path / "bad.json")  # NaN would not be strict JSON
-    mixed = SumOfTermsSpline(
-        make_inputs(2), [TensorTerm("m", (0, 1), [make_basis(3, 3), make_basis(3, 2)])]
-    )
-    with pytest.raises(ValueError):
-        mixed.to_dict()
+
+
+MIXED_DEGREES = (1, 3)  # per-dimension degrees of the mixed-degree test term
+TEST_CAMERA_BLOCK = {"width": 640, "height": 480, "fx": 688.15, "fy": 688.16, "cx": 320.0, "cy": 240.0}
+
+
+def test_json_round_trip_with_per_dimension_degrees_and_camera_block(tmp_path):
+    """A term linear in one input and cubic in the other round-trips, with "degrees"
+    always written and "degree" only for a term of one shared degree; the camera
+    block is stored and restored, and is absent when the camera is unknown."""
+    rng = np.random.default_rng(RANDOM_SEED)
+    term = TensorTerm("m", (0, 1), [make_basis(1, MIXED_DEGREES[0]), make_basis(3, MIXED_DEGREES[1])])
+    model = SumOfTermsSpline(make_inputs(2), [term], camera=dict(TEST_CAMERA_BLOCK))
+    model.coefficients = rng.normal(size=model.n_coefficients)
+    document = model.to_dict()
+    assert document["terms"][0]["degrees"] == list(MIXED_DEGREES) and "degree" not in document["terms"][0]
+    assert document["camera"] == TEST_CAMERA_BLOCK
+    path = tmp_path / "mixed.json"
+    model.to_json(path)
+    loaded = SumOfTermsSpline.from_json(path)
+    assert [b.degree for b in loaded.terms[0].bases] == list(MIXED_DEGREES)
+    assert loaded.camera == TEST_CAMERA_BLOCK
+    X = rng.uniform(LOWER_BOUND_X, UPPER_BOUND_X, size=(N_ROUND_TRIP_POINTS, 2))
+    np.testing.assert_allclose(loaded.evaluate(X), model.evaluate(X), rtol=0, atol=EXACT_TOLERANCE)
+    uniform = make_model(rng).to_dict()
+    assert all(entry["degrees"] == [entry["degree"]] * len(entry["input_indices"]) for entry in uniform["terms"])
+    assert "camera" not in uniform
+    # A map file written before "degrees" existed (only "degree") still loads and evaluates identically.
+    legacy_model = make_model(rng)
+    legacy = legacy_model.to_dict()
+    for entry in legacy["terms"]:
+        entry.pop("degrees")
+    X = rng.uniform(LOWER_BOUND_X, UPPER_BOUND_X, size=(N_ROUND_TRIP_POINTS, 4))
+    np.testing.assert_allclose(SumOfTermsSpline.from_dict(legacy).evaluate(X), legacy_model.evaluate(X),
+                               rtol=0, atol=EXACT_TOLERANCE)

@@ -3,7 +3,8 @@ block weight, and plane-fit normals."""
 import numpy as np
 
 from sphcal.features.depth_features import (
-    SlopeParameters, block_independence_weight, image_slopes, range_from_depth, temporal_statistics)
+    SlopeParameters, block_independence_weight, image_slopes, measurement_space_curvature, range_from_depth,
+    temporal_statistics)
 from sphcal.features.normals import NormalEstimatorParameters, plane_fit_normals
 from sphcal.geometry.camera import PinholeCamera
 
@@ -228,3 +229,49 @@ def test_plane_fit_normals_orientation_is_independent_of_surface_side():
     expected = _plane_normal_toward_camera(-TILT_DEG)
     center = normals[int(CY), int(CX)]
     assert np.degrees(np.arccos(np.clip(center @ expected, -1.0, 1.0))) < NORMAL_TOLERANCE_DEG
+
+
+MEASUREMENT_CURVATURE_RANGE_MM = 1000.0
+MEASUREMENT_CURVATURE_FOCAL_PX = 500.0
+MEASUREMENT_CURVATURE_PER_MM = 0.01       # a 100 mm radius
+EXPECTED_MEASUREMENT_CURVATURE = 0.04     # (1000 / 500)^2 * 0.01 mm/px^2
+UNEQUAL_FOCAL_X_PX = 700.0
+UNEQUAL_FOCAL_Y_PX = 700.0 * 0.97
+
+
+def test_measurement_space_curvature_value():
+    """kappa_m = (range / f)^2 / R: a 100 mm radius at 1000 mm range with a 500 px focal length is 0.04 mm/px^2."""
+    value = measurement_space_curvature(MEASUREMENT_CURVATURE_PER_MM, MEASUREMENT_CURVATURE_RANGE_MM,
+                                        MEASUREMENT_CURVATURE_FOCAL_PX)
+    assert np.isclose(value, EXPECTED_MEASUREMENT_CURVATURE, rtol=1e-12, atol=0.0)
+    # The project's reference point of the default bound: 20 mm radius, 2200 mm, 688 px gives about 0.51.
+    bound_value = measurement_space_curvature(1.0 / 20.0, 2200.0, 688.0)
+    assert np.isclose(bound_value, (2200.0 / 688.0) ** 2 / 20.0) and 0.5 < bound_value < 0.52
+    assert measurement_space_curvature(0.0, MEASUREMENT_CURVATURE_RANGE_MM, MEASUREMENT_CURVATURE_FOCAL_PX) == 0.0
+
+
+def test_measurement_space_curvature_broadcasts_and_scales_with_range_squared():
+    ranges = np.array([[250.0, 500.0], [1000.0, 2000.0]])
+    from_scalar_curvature = measurement_space_curvature(MEASUREMENT_CURVATURE_PER_MM, ranges, MEASUREMENT_CURVATURE_FOCAL_PX)
+    assert from_scalar_curvature.shape == ranges.shape
+    # Doubling the range quadruples the curvature seen in measurement space.
+    np.testing.assert_allclose(from_scalar_curvature[:, 1] / from_scalar_curvature[:, 0], 4.0, rtol=1e-12)
+    np.testing.assert_allclose(from_scalar_curvature[1, 0], EXPECTED_MEASUREMENT_CURVATURE, rtol=1e-12)
+    # A per-pixel curvature image against a scalar range, and an array against an array.
+    curvature_image = np.array([[0.0, MEASUREMENT_CURVATURE_PER_MM], [2 * MEASUREMENT_CURVATURE_PER_MM, 0.0]])
+    image_value = measurement_space_curvature(curvature_image, MEASUREMENT_CURVATURE_RANGE_MM, MEASUREMENT_CURVATURE_FOCAL_PX)
+    np.testing.assert_allclose(image_value, curvature_image * 4.0, rtol=1e-12)
+    both = measurement_space_curvature(curvature_image, ranges, MEASUREMENT_CURVATURE_FOCAL_PX)
+    np.testing.assert_allclose(both, curvature_image * (ranges / MEASUREMENT_CURVATURE_FOCAL_PX) ** 2, rtol=1e-12)
+    # Plain Python scalars give a scalar-like result.
+    assert np.ndim(measurement_space_curvature(MEASUREMENT_CURVATURE_PER_MM, MEASUREMENT_CURVATURE_RANGE_MM,
+                                               MEASUREMENT_CURVATURE_FOCAL_PX)) == 0
+
+
+def test_camera_mean_focal_is_geometric_mean_of_fx_and_fy():
+    camera = PinholeCamera(IMAGE_WIDTH_PX, IMAGE_HEIGHT_PX, UNEQUAL_FOCAL_X_PX, UNEQUAL_FOCAL_Y_PX, CX, CY)
+    assert np.isclose(camera.mean_focal_px, np.sqrt(UNEQUAL_FOCAL_X_PX * UNEQUAL_FOCAL_Y_PX), rtol=1e-14)
+    assert camera.mean_focal_px != 0.5 * (UNEQUAL_FOCAL_X_PX + UNEQUAL_FOCAL_Y_PX)
+    block = camera.map_block()
+    assert block["fx"] == UNEQUAL_FOCAL_X_PX and block["fy"] == UNEQUAL_FOCAL_Y_PX
+    assert (block["width"], block["height"]) == (IMAGE_WIDTH_PX, IMAGE_HEIGHT_PX)

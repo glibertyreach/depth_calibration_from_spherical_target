@@ -93,7 +93,7 @@ def synthetic_dataset(tmp_path_factory) -> Path:
 def small_model_configuration() -> ModelConfiguration:
     return ModelConfiguration((TermSpec("position", (0, 1, 2), (4, 3, 4)),
                                TermSpec("slope", (3, 4, 2), (4, 4, 2)),
-                               TermSpec("curvature", (5, 3, 4), (1, 2, 2), degree=1)))
+                               TermSpec("curvature", (5, 2, 3, 4), (1, 2, 2, 2), degree=(1, 3, 3, 3))))
 
 
 def fit_parameters() -> CorrectionFitParameters:
@@ -123,8 +123,11 @@ def test_fit_recovers_injected_field(synthetic_dataset: Path):
     assert dt < MAX_TRANSFORM_TRANSLATION_SLACK_MM and drot < MAX_TRANSFORM_ROTATION_SLACK_DEG, (dt, drot)
     injected = default_injected_error_field_for_camera(TEST_CAMERA)
     held = result.holdout_samples
+    # The map's sixth input is measurement-space curvature (mm/px^2); the injected
+    # field takes the physical curvature 1/R, so undo the conversion for it.
+    physical_curvature = held.inputs[:, 5] * (TEST_CAMERA.mean_focal_px / held.inputs[:, 2]) ** 2
     error_mm = injected(held.inputs[:, 0], held.inputs[:, 1], held.inputs[:, 2], held.inputs[:, 3], held.inputs[:, 4],
-                        held.inputs[:, 5])
+                        physical_curvature)
     true_points = held.ray_direction * (held.inputs[:, 2] - error_mm)[:, None]
     corrected_points = held.ray_direction * (held.inputs[:, 2] + result.model.evaluate(held.inputs))[:, None]
     # Carry both into the TRUE sensor frame and remove the best rigid motion
@@ -192,3 +195,20 @@ def test_fit_cli_report_contains_shape_checks(fitted, synthetic_dataset: Path, t
     report = json.loads((tmp_path / "report.json").read_text())
     assert "holdout_sphere_centers" in report
     assert {row["kind"] for row in report["holdout_shape_checks"]} == {"sphere", "board"}
+
+
+def test_sample_curvature_input_is_measurement_space_and_map_stores_the_camera(fitted):
+    """The sixth sample input is (measured range / f_mean)^2 / R on sphere samples and 0 on boards, and the
+    fitted map file carries the camera focal lengths a runtime evaluator needs to form it."""
+    _, result = fitted
+    samples = result.training_samples
+    on_sphere = np.array([samples.pose_kinds[i] == "sphere" for i in samples.pose_index])
+    assert on_sphere.any() and (~on_sphere).any()
+    assert np.all(samples.inputs[~on_sphere, 5] == 0.0)
+    physical = samples.inputs[on_sphere, 5] * (TEST_CAMERA.mean_focal_px / samples.inputs[on_sphere, 2]) ** 2
+    # Only the two sphere radii of the dataset occur, as curvatures 1/40 and 1/80.
+    nearest = np.minimum(np.abs(physical - 1.0 / SPHERE_RADII_MM[0]), np.abs(physical - 1.0 / SPHERE_RADII_MM[1]))
+    assert nearest.max() < 1.0e-12
+    document = result.model.to_dict()
+    assert document["camera"]["fx"] == TEST_CAMERA.focal_x_px and document["camera"]["fy"] == TEST_CAMERA.focal_y_px
+    assert document["inputs"][5]["unit"].startswith("mm/px^2")

@@ -3,8 +3,8 @@ Assembly of calibration samples from a CaptureSet and a sensor-to-positioner
 transform.
 
 One sample is one native pixel of one pose: its map inputs (u, v, measured
-range, slope components, curvature), its residual target (true range along the
-pixel ray minus measured range), and its weight. The true range comes from the
+range, slope components, measurement-space curvature), its residual target
+(true range along the pixel ray minus measured range), and its weight. The true range comes from the
 known target (sphere or board) at its commanded pose, transformed into the
 sensor frame. Section 4 of docs/design/code_design.md defines every quantity.
 
@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from sphcal.features.depth_features import SlopeParameters, image_slopes, range_from_depth, temporal_statistics, \
-    block_independence_weight
+from sphcal.features.depth_features import SlopeParameters, image_slopes, measurement_space_curvature, range_from_depth, \
+    temporal_statistics, block_independence_weight
 from sphcal.geometry.camera import PinholeCamera
 from sphcal.geometry.targets import BoardTarget, CoverageParameters, PredictedCoverage, predict_board_coverage, \
     predict_sphere_coverage
@@ -32,9 +32,14 @@ from sphcal.io.capture_set import CaptureSet
 from sphcal.io.poses import CaptureRecord
 
 INPUT_NAMES = ("u", "v", "range", "slope_u", "slope_v", "curvature")
-"""Order of the map inputs; fixed by the design document, section 4."""
+"""Order of the map inputs; fixed by the design document, section 4. The sixth
+input, "curvature", is the MEASUREMENT-SPACE curvature kappa_m = (range / f)^2 /
+R in mm of depth per px^2 (f the camera's mean focal length in pixels, R the
+physical radius of curvature; 0 on a plane), not the physical curvature 1 / R;
+see sphcal.features.depth_features.measurement_space_curvature."""
 
-INPUT_UNITS = ("px", "px", "mm", "dimensionless", "dimensionless", "1/mm")
+INPUT_UNITS = ("px", "px", "mm", "dimensionless", "dimensionless", "mm/px^2 (measurement space)")
+"""Units of the map inputs, in INPUT_NAMES order."""
 
 
 @dataclass(frozen=True)
@@ -88,7 +93,7 @@ class SampleParameters:
 class SampleTable:
     """Correction samples. Rows are native pixels of poses."""
 
-    inputs: np.ndarray            # (N, 6) in INPUT_NAMES order
+    inputs: np.ndarray            # (N, 6) in INPUT_NAMES order; column 5 is measurement-space curvature, mm/px^2
     target: np.ndarray            # (N,) true range minus measured range, mm
     weight: np.ndarray            # (N,) inverse variance times block factor
     pose_index: np.ndarray        # (N,) index into the pose id list
@@ -117,7 +122,7 @@ class SampleTable:
 class NoReadTable:
     """Read-probability samples, indexed by predicted geometry."""
 
-    inputs: np.ndarray            # (N, 6), predicted
+    inputs: np.ndarray            # (N, 6), predicted; column 5 is measurement-space curvature from the predicted range
     read_fraction: np.ndarray     # (N,) in [0, 1]
     trials: np.ndarray            # (N,) number of frames, times the block factor
     pose_index: np.ndarray
@@ -226,9 +231,13 @@ def _pose_correction_rows(args) -> dict:
     rays = camera.ray_directions()
     sel = np.nonzero(usable)
     n = sel[0].size
+    # Sixth input: the target's physical curvature (1/R, or 0 on a board) in measurement
+    # space, from each sample's own MEASURED range, as the runtime evaluator will form it.
+    curvature_mm_per_px2 = measurement_space_curvature(np.full(n, coverage.curvature_per_mm), measured_range[sel],
+                                                       camera.mean_focal_px)
     return {
         "inputs": np.column_stack([u_grid[sel], v_grid[sel], measured_range[sel], slope_u[sel], slope_v[sel],
-                                   np.full(n, coverage.curvature_per_mm)]),
+                                   curvature_mm_per_px2]),
         "target": residual[sel], "weight": block_weight / variance[sel],
         "pose": np.full(n, pose_number, dtype=np.int64),
         "pixel": (sel[0] * camera.width + sel[1]).astype(np.int64),
@@ -311,8 +320,12 @@ def _pose_noread_rows(args) -> dict:
     usable = covered & np.isfinite(slope_u) & np.isfinite(slope_v) & stride_mask(covered.shape, params.noread_pixel_stride)
     sel = np.nonzero(usable)
     n = sel[0].size
+    # No measurement exists for a pixel that did not read, so the measurement-space
+    # curvature uses the PREDICTED range, like every other input of this table.
+    curvature_mm_per_px2 = measurement_space_curvature(np.full(n, coverage.curvature_per_mm), coverage.range_mm[sel],
+                                                       camera.mean_focal_px)
     return {"inputs": np.column_stack([u_grid[sel], v_grid[sel], coverage.range_mm[sel], slope_u[sel], slope_v[sel],
-                                       np.full(n, coverage.curvature_per_mm)]),
+                                       curvature_mm_per_px2]),
             "fraction": read_fraction[sel], "trials": np.full(n, n_frames * block_weight),
             "pose": np.full(n, pose_number, dtype=np.int64), "cos": coverage.cos_incidence[sel]}
 

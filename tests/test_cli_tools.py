@@ -160,7 +160,7 @@ def test_plan_poses_matrix_input_and_errors(dataset: Path, tmp_path: Path, capsy
                             "--image-size", *map(str, PLAN_IMAGE_SIZE), "--out", str(out)]) == 0
     _, rows = read_csv_rows(out / plan_poses.PLAN_CSV_NAME)
     first = next(row for row in rows if row["kind"] == "sphere")
-    assert first["pose_id"].startswith("s040_z0300_")
+    assert first["pose_id"] == "s076_z0300_000"          # the one sphere (76.2 mm) at the first ladder station
     # No camera given: the message says what to supply.
     assert plan_poses.main(["--sensor-in-base", str(sensor_file), "--out", str(out)]) == plan_poses.EXIT_INPUT_ERROR
     assert "--camera" in capsys.readouterr().err
@@ -242,7 +242,7 @@ def test_make_manifest_accepts_plan_poses_csv(dataset: Path, tmp_path: Path):
     sensor_file.write_text(json.dumps({"matrix": TEST_SENSOR_TO_BASE.as_matrix().reshape(-1).tolist()}))
     plan_dir = tmp_path / "plan"
     assert plan_poses.main(["--sensor-in-base", str(sensor_file), "--camera", str(sorted(dataset.glob("*.mc"))[0]),
-                            "--depth-planes-near", "1", "--depth-planes-far", "1", "--board-depths-mm", "900",
+                            "--sphere-depths-mm", "600", "900", "--board-depths-mm", "900",
                             "--board-tilts-deg", "0", "--out", str(plan_dir)]) == 0
     _, rows = read_csv_rows(plan_dir / plan_poses.PLAN_CSV_NAME)
     captures = tmp_path / "captures"

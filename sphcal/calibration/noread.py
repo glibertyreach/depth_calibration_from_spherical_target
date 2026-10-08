@@ -21,6 +21,7 @@ import numpy as np
 
 from sphcal.calibration.model_config import ModelConfiguration, build_model, noread_configuration
 from sphcal.calibration.samples import NoReadTable, SampleParameters, build_noread_samples
+from sphcal.features.depth_features import measurement_space_curvature
 from sphcal.geometry.transforms import RigidTransform
 from sphcal.io.capture_set import CaptureSet
 from sphcal.spline.fit import LogisticParameters, fit_logistic
@@ -53,14 +54,20 @@ def read_probability(model: SumOfTermsSpline, inputs: np.ndarray) -> np.ndarray:
 
 
 def _onset_along_azimuth(model: SumOfTermsSpline, u: float, v: float, range_mm: float, azimuth_deg: float,
-                         curvature: float, params: NoReadFitParameters) -> float | None:
-    """Incidence at which the read probability crosses the onset value along one slope azimuth."""
+                         curvature_per_mm: float, focal_px: float, params: NoReadFitParameters) -> float | None:
+    """
+    Incidence at which the read probability crosses the onset value along one slope azimuth.
+
+    curvature_per_mm is the PHYSICAL curvature 1 / R of the surface (0 for a plane); the
+    map's curvature input is measurement-space curvature, so it is converted here at the
+    sweep's range with the camera's mean focal length focal_px.
+    """
     start, stop, step = params.onset_incidence_grid_deg
     incidence = np.arange(start, stop + step, step)
     tan_a = np.tan(np.radians(incidence))
     inputs = np.column_stack([np.full_like(tan_a, u), np.full_like(tan_a, v), np.full_like(tan_a, range_mm),
                               tan_a * np.cos(np.radians(azimuth_deg)), tan_a * np.sin(np.radians(azimuth_deg)),
-                              np.full_like(tan_a, curvature)])
+                              np.full_like(tan_a, measurement_space_curvature(curvature_per_mm, range_mm, focal_px))])
     inside = (np.abs(inputs[:, 3]) <= model.inputs[3].upper) & (np.abs(inputs[:, 4]) <= model.inputs[4].upper)
     p = read_probability(model, inputs[inside])
     below = np.nonzero(p < params.onset_probability)[0]
@@ -72,7 +79,8 @@ def fit_noread(capture_set: CaptureSet, sensor_to_positioner: RigidTransform, pa
     first = capture_set.load_stack(capture_set.pose_ids()[0])
     camera = first.camera
     model = build_model(params.model, samples.inputs, camera.width, camera.height,
-                        metadata={"output": "logit of read probability", "indexed_by": "predicted geometry"})
+                        metadata={"output": "logit of read probability", "indexed_by": "predicted geometry"},
+                        camera=camera)
     design = model.design(samples.inputs)
     result = fit_logistic(design, samples.read_fraction, samples.trials, model.penalty(), params.logistic)
     model.coefficients = result.coefficients
@@ -80,5 +88,5 @@ def fit_noread(capture_set: CaptureSet, sensor_to_positioner: RigidTransform, pa
     center_u, center_v = (camera.width - 1) / 2.0, (camera.height - 1) / 2.0
     onsets = {}
     for label, azimuth in (("along_u", 0.0), ("along_v", 90.0), ("against_u", 180.0), ("against_v", 270.0)):
-        onsets[label] = _onset_along_azimuth(model, center_u, center_v, reference_range, azimuth, 0.0, params)
+        onsets[label] = _onset_along_azimuth(model, center_u, center_v, reference_range, azimuth, 0.0, camera.mean_focal_px, params)
     return NoReadFitResult(model, samples, onsets, reference_range)

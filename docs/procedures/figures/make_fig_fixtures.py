@@ -1,6 +1,6 @@
 """
 fig_fixtures.png -- the three fixtures of the stage-1 capture procedure, drawn
-to scale for sphere A (radius 38.1 mm):
+to scale for the calibration sphere (sphere B, radius 76.2 mm; decision D-15):
 
  (a) the sphere on its stem, seen from the side, with the sensor's viewing
      direction: the stem points away from the sensor so that the sphere hides
@@ -25,13 +25,24 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, FancyArrowPatch, Polygon, Rectangle
 
-SPHERE_RADIUS_MM = 38.1
-STEM_LENGTH_MM = 130.0          # flange face to sphere surface
-STEM_DIAMETER_MM = 16.0
-ADAPTER_THICKNESS_MM = 12.0
+SPHERE_RADIUS_MM = 76.2
+STEM_LENGTH_MM = 205.0          # adapter face to sphere surface (drawing SC1-04)
+STEM_DIAMETER_MM = 30.0         # ground body (drawing SC1-04)
+ADAPTER_THICKNESS_MM = 22.0     # adapter plate body (drawing SC1-02)
 ADAPTER_WIDTH_MM = 80.0
 FLANGE_WIDTH_MM = 63.0          # a common ISO 9409 flange pattern size
 NEST_BALL_RADIUS_MM = 12.0
+NEST_BALL_CIRCLE_RADIUS_MM = 30.0   # ball pockets on a 60 mm circle (drawing SC1-06)
+NEST_BALL_CENTER_HEIGHT_MM = 2.0    # ball center above the base top (pockets 10 deep, drawing SC1-06)
+NEST_SIDE_VIEW_COS = 0.866          # cos 30 deg: two balls at 210 and 330 deg seen from the side
+PANEL_A_MARGIN_BELOW_MM = 70.0      # room under the sphere for the tool-center-point label
+PANEL_A_MARGIN_ABOVE_MM = 40.0      # room above the sphere for the "stem hidden" note
+SENSOR_GAP_MM = 150.0               # sphere surface to sensor in panel (a), room for the viewing-direction label
+DIMENSION_LINE_DROP_MM = 30.0       # stem dimension line, below the adapter's lower edge
+DIMENSION_TEXT_GAP_MM = 4.0         # gap between a dimension line and its text below it
+RADIUS_TEXT_GAP_MM = 4.0            # gap between the radius arrow and its label, left of it
+RADIUS_TEXT_HEIGHT_FRACTION = 0.3   # radius label height as a fraction of R: low enough to clear the outline
+PANEL_B_MARGIN_MM = 95.0            # room beside the sphere in panel (b) for the tilted stems and their labels
 NEST_BASE_WIDTH_MM = 110.0
 BOARD_THICKNESS_MM = 6.0
 BOARD_WIDTH_MM = 200.0
@@ -58,25 +69,26 @@ def draw_sphere_mount(ax):
     ax.annotate("tool center point\n= sphere center", (center_x, 0.0), (center_x + 30, -SPHERE_RADIUS_MM - 48),
                 ha="center", fontsize=8, color=ACCENT, arrowprops=dict(arrowstyle="-", color=ACCENT, lw=0.8))
     # Sensor far to the right, looking left along the stem axis.
-    sensor_x = center_x + SPHERE_RADIUS_MM + 95
+    sensor_x = center_x + SPHERE_RADIUS_MM + SENSOR_GAP_MM
     ax.add_patch(Rectangle((sensor_x, -22), 28, 44, color=BLUE))
     ax.text(sensor_x + 14, 30, "sensor", ha="center", fontsize=8, color=BLUE)
     ax.add_patch(FancyArrowPatch((sensor_x, 0), (center_x + SPHERE_RADIUS_MM + 6, 0), arrowstyle="->", color=BLUE,
                                  mutation_scale=14, lw=1.2))
-    ax.text((sensor_x + center_x) / 2 + 20, 8, "viewing direction", fontsize=7, color=BLUE, ha="center")
+    ax.text((sensor_x + center_x + SPHERE_RADIUS_MM) / 2, 8, "viewing direction", fontsize=7, color=BLUE, ha="center")
     ax.text(center_x - 10, SPHERE_RADIUS_MM + 12, "stem hidden behind\nthe sphere", fontsize=7, ha="center", color=DARK)
     # Dimension lines.
-    y_dim = -ADAPTER_WIDTH_MM / 2 - 30
+    y_dim = -ADAPTER_WIDTH_MM / 2 - DIMENSION_LINE_DROP_MM
     ax.annotate("", (stem_x0, y_dim), (stem_x0 + STEM_LENGTH_MM, y_dim), arrowprops=dict(arrowstyle="<->", lw=0.8))
-    ax.text(stem_x0 + STEM_LENGTH_MM / 2, y_dim - 10, f"stem {STEM_LENGTH_MM:.0f} mm (at least 2R + 50)",
-            ha="center", fontsize=7)
+    ax.text(stem_x0 + STEM_LENGTH_MM / 2, y_dim - DIMENSION_TEXT_GAP_MM, f"stem {STEM_LENGTH_MM:.0f} mm (at least 2R + 50)",
+            ha="center", va="top", fontsize=7)
     ax.annotate("", (center_x, 0), (center_x, SPHERE_RADIUS_MM), arrowprops=dict(arrowstyle="<->", lw=0.8))
-    ax.text(center_x + 6, SPHERE_RADIUS_MM / 2, f"R = {SPHERE_RADIUS_MM:.1f}", fontsize=7)
+    ax.text(center_x - RADIUS_TEXT_GAP_MM, SPHERE_RADIUS_MM * RADIUS_TEXT_HEIGHT_FRACTION, f"R = {SPHERE_RADIUS_MM:.1f}", fontsize=7, ha="right",
+            va="center")
     ax.text(flange_x - 7, -FLANGE_WIDTH_MM / 2 - 8, "robot flange", fontsize=7, ha="center", va="top", color=DARK)
     ax.text(flange_x + ADAPTER_THICKNESS_MM / 2 + 10, ADAPTER_WIDTH_MM / 2 + 6, "adapter (doweled)", fontsize=6.5,
             ha="left", va="bottom", color=DARK)
     ax.set_xlim(-40, sensor_x + 45)
-    ax.set_ylim(-130, 80)
+    ax.set_ylim(-SPHERE_RADIUS_MM - PANEL_A_MARGIN_BELOW_MM, SPHERE_RADIUS_MM + PANEL_A_MARGIN_ABOVE_MM)
     ax.set_aspect("equal")
     ax.axis("off")
     ax.set_title("(a) sphere on its stem, side view", fontsize=9)
@@ -86,12 +98,13 @@ def draw_nest(ax):
     # Side view: two of the three nest balls visible, sphere seated on them.
     base_y = 0.0
     ax.add_patch(Rectangle((-NEST_BASE_WIDTH_MM / 2, base_y - 14), NEST_BASE_WIDTH_MM, 14, color=STEEL))
-    ball_dx = SPHERE_RADIUS_MM * 0.75
+    ball_dx = NEST_BALL_CIRCLE_RADIUS_MM * NEST_SIDE_VIEW_COS
+    ball_y = base_y + NEST_BALL_CENTER_HEIGHT_MM
     for x in (-ball_dx, ball_dx):
-        ax.add_patch(Circle((x, base_y + NEST_BALL_RADIUS_MM), NEST_BALL_RADIUS_MM, facecolor="#bbbbbb", edgecolor=DARK))
+        ax.add_patch(Circle((x, ball_y), NEST_BALL_RADIUS_MM, facecolor="#bbbbbb", edgecolor=DARK))
     # Sphere center height: distance between ball centers and sphere center is R + r.
     contact = SPHERE_RADIUS_MM + NEST_BALL_RADIUS_MM
-    center_y = base_y + NEST_BALL_RADIUS_MM + (contact ** 2 - ball_dx ** 2) ** 0.5
+    center_y = ball_y + (contact ** 2 - NEST_BALL_CIRCLE_RADIUS_MM ** 2) ** 0.5
     ax.add_patch(Circle((0.0, center_y), SPHERE_RADIUS_MM, facecolor=SPHERE_COLOR, edgecolor=DARK, lw=1.2))
     ax.plot([0.0], [center_y], marker="+", color=ACCENT, markersize=14, mew=2)
     # Stems in several orientations (the robot re-seats the sphere from different wrist angles).
@@ -107,7 +120,7 @@ def draw_nest(ax):
     ax.text(0, base_y - 24, "three-ball nest (two balls visible), bolted down", fontsize=7, ha="center")
     ax.text(0, center_y + SPHERE_RADIUS_MM + 90, "the center stays put while the wrist turns:\n"
             "the robot's TCP routine solves for that point", fontsize=7.5, ha="center", color=ACCENT)
-    ax.set_xlim(-110, 110)
+    ax.set_xlim(-SPHERE_RADIUS_MM - PANEL_B_MARGIN_MM, SPHERE_RADIUS_MM + PANEL_B_MARGIN_MM)
     ax.set_ylim(-40, center_y + SPHERE_RADIUS_MM + 110)
     ax.set_aspect("equal")
     ax.axis("off")

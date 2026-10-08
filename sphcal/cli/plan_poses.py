@@ -1,6 +1,6 @@
 """
-Command line: plan the robot poses of a stage-1 capture (sphere and board
-targets spread through the working volume of the depth sensor).
+Command line: plan the robot poses of a stage-1 capture (one calibration sphere
+and boards spread through the working volume of the depth sensor).
 
     python3 -m sphcal.cli.plan_poses --sensor-in-base sensor_in_base.json \\
         --camera capture.mc --out plan/
@@ -30,12 +30,27 @@ Frames and conventions (millimeters, degrees at the interface)
                   axis in the board plane at the given azimuth (azimuth 0 is the
                   board x axis, azimuth 90 the board y axis).
 
-Sphere grid. Each depth plane is a lateral grid of centers in the sensor frame
-with x and y spacing equal to ``spacing_in_radii`` times the radius in use,
-covering plus/minus ``fov_fill`` times the half field width at that depth. The
-near radius is planned from the minimum depth up to the switch depth and the
-far radius from the overlap band below the switch depth up to the maximum depth,
-so both radii are captured inside the overlap band.
+Sphere stations. Only ONE sphere is used (decision D-15): radius
+``sphere_radius_mm`` (76.2 mm, sphere B). It is swept through a geometric ladder
+of depths ("stations"): ``depth_min_mm``, then each next station the previous one
+times ``sphere_depth_ratio`` (2 ** 0.25, so the depth doubles every four
+stations), up to ``depth_max_mm``. ``depth_max_mm`` is appended as the last
+station when the ladder stops short of it by more than ``ladder_end_tolerance_mm``.
+The default stations are 300, 357, 424, 505, 600, 714, 849, 1009 and 1100 mm. A
+geometric ladder spaces the stations evenly in the logarithm of the depth; the
+measurement-space curvature of the sphere, (range / f)^2 / R, then changes by
+the same factor (the ratio squared) from one station to the next. An explicit
+list ``sphere_depths_mm`` replaces the ladder.
+
+Sphere grid. Each station is a lateral grid of centers in the sensor frame with x
+and y spacing equal to ``spacing_in_radii`` times the radius, covering plus/minus
+``fov_fill`` times the half field width at that depth. A grid pose whose
+predicted silhouette (the exactly projected silhouette circle, see
+``silhouette_leaves_image``, kept ``edge_margin_px`` inside the border) would
+leave the image is DROPPED, so a large sphere at near range keeps only the poses
+it can fit. The center pose (0, 0, depth) is always
+planned and always kept, even if the lattice has no point at the center and even
+if the sphere is large in the image at that depth.
 
 Board poses. Centers lie on the diagonal of the field at each board depth,
 spread over plus/minus ``board_lateral_fill`` times the half field at that depth
@@ -88,11 +103,25 @@ MIN_BOOTSTRAP_PAIRS = 3
 
 SENSOR_X_AXIS = np.array([1.0, 0.0, 0.0])
 """Sensor x axis, the reference for the in-plane orientation of tools."""
+SENSOR_Y_AXIS = np.array([0.0, 1.0, 0.0])
+"""Sensor y axis, used to build a basis of the plane perpendicular to a viewing ray."""
+SILHOUETTE_SAMPLES = 180
+"""Points on a sphere's silhouette circle that are projected to test whether it
+leaves the image (at 2 degrees apart, the sampling error is well below a pixel)."""
 BOARD_CORNER_SIGNS = ((1.0, 1.0), (1.0, -1.0), (-1.0, -1.0), (-1.0, 1.0))
 """Signs (x, y) of the four board corners in board coordinates, in drawing order."""
 
 SPHERE_ID_FORMAT = "s{radius:03.0f}_z{depth:04.0f}_{index:03d}"
-"""Pose id of a sphere pose: radius, depth plane, index within the plane."""
+"""Pose id of a sphere pose: radius, station depth, index within the station.
+The radius stays in the id (76.2 mm gives s076) so that a plan with more than
+one radius, or a later sphere, cannot collide."""
+
+LADDER_STEPS_PER_OCTAVE = 4
+"""Stations per doubling of the depth in the default geometric ladder."""
+DEFAULT_SPHERE_DEPTH_RATIO = 2.0 ** (1.0 / LADDER_STEPS_PER_OCTAVE)
+"""Default ratio between consecutive sphere stations (about 1.189)."""
+DEFAULT_SPHERE_RADIUS_MM = 76.2
+"""Radius of the single calibration sphere (sphere B, a 6 inch diameter sphere)."""
 BOARD_ID_FORMAT = "b_z{depth:04.0f}_t{tilt:02.0f}_a{azimuth:03.0f}_{index}"
 """Pose id of a board pose: depth, tilt, azimuth, lateral position index."""
 
@@ -118,12 +147,11 @@ PLOT_FIGURE_SIZE_IN = (12.0, 6.0)
 """Figure size of plan.png in inches (width, height)."""
 PLOT_MARKER_SIZE = 22.0
 """Scatter marker area in points squared."""
-PLOT_COLOR_NEAR_SPHERE = "#0072B2"
-PLOT_COLOR_FAR_SPHERE = "#D55E00"
+PLOT_COLOR_SPHERE = "#0072B2"
 PLOT_COLOR_BOARD = "#009E73"
 PLOT_COLOR_FRUSTUM = "#444444"
-"""Colorblind-safe colors (Okabe-Ito) for the near-radius spheres, far-radius
-spheres, boards, and the frustum lines."""
+"""Colorblind-safe colors (Okabe-Ito) for the sphere poses, board poses, and the
+frustum lines."""
 PLOT_HOLDOUT_EDGE_COLOR = "#000000"
 """Edge color of the markers of held-out poses."""
 PLOT_FRUSTUM_LINE_WIDTH = 1.0
@@ -138,29 +166,41 @@ class PlanParameters:
     """Every number of the plan; the command-line defaults come from here."""
 
     depth_min_mm: float = 300.0
-    """Nearest sphere depth plane (sensor z)."""
+    """Nearest sphere station (sensor z); the first rung of the ladder."""
     depth_max_mm: float = 1100.0
-    """Farthest sphere depth plane (sensor z)."""
-    near_radius_mm: float = 40.0
-    """Radius of the small sphere, planned from depth_min up to the switch depth."""
-    far_radius_mm: float = 80.0
-    """Radius of the large sphere, planned from the overlap band up to depth_max."""
-    radius_switch_depth_mm: float = 550.0
-    """Depth at which the plan changes from the near to the far radius."""
-    overlap_band_mm: float = 50.0
-    """Width of the band below the switch depth in which both radii are planned."""
+    """Farthest sphere station (sensor z); the ladder stops at or below it."""
+    sphere_radius_mm: float = DEFAULT_SPHERE_RADIUS_MM
+    """Radius of the single calibration sphere."""
+    sphere_depth_ratio: float = DEFAULT_SPHERE_DEPTH_RATIO
+    """Ratio of consecutive ladder stations; must exceed 1."""
+    ladder_end_tolerance_mm: float = 20.0
+    """depth_max_mm is appended as a last station when the ladder's last rung is
+    below it by more than this. About 2 percent of the far end: a closer rung is
+    not worth a separate station."""
+    sphere_depths_mm: tuple[float, ...] | None = None
+    """Explicit station depths; when given they replace the ladder entirely."""
     spacing_in_radii: float = 1.5
-    """Lateral grid spacing as a multiple of the radius in use."""
+    """Lateral grid spacing as a multiple of the sphere radius."""
     fov_fill: float = 0.8
-    """Fraction of the half field covered by sphere centers at each depth."""
-    depth_planes_near: int = 3
-    """Number of depth planes for the near radius (switch depth included)."""
-    depth_planes_far: int = 4
-    """Number of depth planes for the far radius (overlap band start included)."""
+    """Fraction of the half field covered by sphere centers at each depth, before
+    the limit set by the room the sphere's image leaves (see min_positions_per_axis)."""
+    min_positions_per_axis: int = 3
+    """Least number of sphere-center positions along each image axis at a station.
+    The grid never extends past the room the sphere's image leaves inside the image
+    border; where that room is shorter than spacing_in_radii allows for this many
+    positions, the spacing shrinks instead, so that a near-range station still shows
+    the sphere off axis. Such placements overlap in the image, which the curvature
+    sweep accepts (decision D-16). Set it to 1 to keep the radius-based spacing."""
+    room_bisection_tolerance_mm: float = 0.5
+    """Precision of the room search (mm of sphere-center offset). The room is found
+    with the same exact silhouette test that drops poses, so a coarser tolerance only
+    makes the room slightly smaller, never too large."""
     board_half_size_mm: tuple[float, float] = (120.0, 90.0)
     """Board half width and half height."""
-    board_depths_mm: tuple[float, ...] = (350.0, 550.0, 800.0, 1050.0)
-    """Sensor-z depths of the board centers."""
+    board_depths_mm: tuple[float, ...] = (350.0, 425.0, 550.0, 800.0, 1050.0)
+    """Sensor-z depths of the board centers. The extra near-range depth (425 mm)
+    compensates for the single large sphere, which places few distinct poses at
+    near range."""
     board_tilts_deg: tuple[float, ...] = (0.0, 20.0, 40.0)
     """Board tilts away from facing the sensor."""
     board_azimuths_deg: tuple[float, ...] = (0.0, 90.0)
@@ -170,7 +210,7 @@ class PlanParameters:
     board_lateral_fill: float = 0.5
     """Fraction of the half field covered by board centers at each depth."""
     edge_margin_px: float = 10.0
-    """Board corners must project at least this far inside the image."""
+    """Board corners and sphere silhouettes must project at least this far inside the image."""
     holdout_fraction: float = 0.2
     """Fraction of poses tagged as held out in the holdout column (informational)."""
     seed: int = 0
@@ -190,6 +230,7 @@ class PlannedPose:
     center_sensor: np.ndarray
     tool_to_sensor: np.ndarray
     plane_depth_mm: float
+    """Station depth (spheres) or board depth plane; the key of the per-depth counts."""
     holdout: bool = False
 
 
@@ -297,14 +338,15 @@ def validate_parameters(p: PlanParameters) -> None:
     """Raise PlanInputError, saying what to change, for inconsistent parameters."""
     checks = [
         (0.0 < p.depth_min_mm < p.depth_max_mm, "--depth-min-mm must be positive and smaller than --depth-max-mm"),
-        (p.depth_min_mm < p.radius_switch_depth_mm < p.depth_max_mm,
-         "--radius-switch-depth-mm must lie between --depth-min-mm and --depth-max-mm"),
-        (0.0 <= p.overlap_band_mm < p.radius_switch_depth_mm - p.depth_min_mm,
-         "--overlap-band-mm must be zero or more and smaller than the distance from the minimum depth to the switch depth"),
-        (p.near_radius_mm > 0.0 and p.far_radius_mm > 0.0, "sphere radii must be positive"),
+        (p.sphere_radius_mm > 0.0, "--sphere-radius-mm must be positive"),
+        (p.sphere_depth_ratio > 1.0, "--sphere-depth-ratio must be greater than 1"),
+        (p.ladder_end_tolerance_mm >= 0.0, "--ladder-end-tolerance-mm must be zero or more"),
+        (p.sphere_depths_mm is None or (len(p.sphere_depths_mm) > 0 and all(d > 0.0 for d in p.sphere_depths_mm)),
+         "--sphere-depths-mm must be a list of positive numbers"),
         (p.spacing_in_radii > 0.0, "--spacing-in-radii must be positive"),
         (0.0 < p.fov_fill <= 1.0, "--fov-fill must be in (0, 1]"),
-        (p.depth_planes_near >= 1 and p.depth_planes_far >= 1, "depth plane counts must be at least 1"),
+        (p.min_positions_per_axis >= 1, "--min-positions-per-axis must be at least 1"),
+        (p.room_bisection_tolerance_mm > 0.0, "--room-bisection-tolerance-mm must be positive"),
         (p.board_lateral_positions >= 1, "--board-lateral-positions must be at least 1"),
         (0.0 <= p.board_lateral_fill <= 1.0, "--board-lateral-fill must be in [0, 1]"),
         (0.0 <= p.holdout_fraction <= 1.0, "--holdout-fraction must be in [0, 1]"),
@@ -335,6 +377,68 @@ def grid_positions(half_extent_mm: float, spacing_mm: float) -> np.ndarray:
     return (np.arange(count) - (count - 1) / 2.0) * spacing_mm
 
 
+def sphere_fits_in_image(camera: PinholeCamera, center: np.ndarray, radius_mm: float, margin_px: float) -> bool:
+    """True when the whole silhouette of a sphere at this center lies margin_px inside the image."""
+    probe = PlannedPose(pose_id="probe", kind=TARGET_KIND_SPHERE, radius_mm=radius_mm, half_size_mm=None,
+                        center_sensor=center, tool_to_sensor=np.eye(3), plane_depth_mm=float(center[2]))
+    return not silhouette_leaves_image(camera, probe, margin_px)
+
+
+def _largest_fitting_scale(fits, upper: float, tolerance: float) -> float:
+    """Largest s in [0, upper] with fits(s) true, by bisection, assuming fits is true
+    up to some s* and false beyond it; 0 when even s = 0 does not fit."""
+    if not fits(0.0):
+        return 0.0
+    if fits(upper):
+        return upper
+    low, high = 0.0, upper
+    while high - low > tolerance:
+        middle = 0.5 * (low + high)
+        if fits(middle):
+            low = middle
+        else:
+            high = middle
+    return low
+
+
+def sphere_center_room_mm(camera: PinholeCamera, depth_mm: float, radius_mm: float, margin_px: float,
+                          tolerance_mm: float) -> tuple[float, float]:
+    """Half extents (mm, sensor x and y, at sensor depth z) of the rectangle of sphere
+    centers whose silhouettes all lie margin_px inside the image.
+
+    Each axis is searched on its own with the exact silhouette test (both signs,
+    since the principal point need not be centered); the two extents are then
+    shrunk together until the rectangle's corners fit too. Zero when not even the
+    center fits."""
+    half_x, half_y = half_field_at_depth_mm(camera, depth_mm)
+
+    def fits_at(x: float, y: float) -> bool:
+        return all(sphere_fits_in_image(camera, np.array([sx * x, sy * y, depth_mm]), radius_mm, margin_px)
+                   for sx in (-1.0, 1.0) for sy in (-1.0, 1.0))
+
+    room_x = _largest_fitting_scale(lambda x: fits_at(x, 0.0), half_x, tolerance_mm)
+    room_y = _largest_fitting_scale(lambda y: fits_at(0.0, y), half_y, tolerance_mm)
+    if room_x == 0.0 or room_y == 0.0:
+        return room_x, room_y
+    # Shrink both extents by a common factor until the corners fit; the factor's
+    # tolerance is expressed relative to the larger extent.
+    scale = _largest_fitting_scale(lambda t: fits_at(t * room_x, t * room_y), 1.0,
+                                   tolerance_mm / max(room_x, room_y))
+    return scale * room_x, scale * room_y
+
+
+def station_axis_grid(fov_half_mm: float, room_half_mm: float, radius_spacing_mm: float,
+                      min_positions: int) -> np.ndarray:
+    """Center positions along one axis of a station: the radius-based spacing over
+    the smaller of the field-fill extent and the room, with the spacing shrunk when
+    fewer than min_positions would fit (and the room is not zero)."""
+    extent = min(fov_half_mm, room_half_mm)
+    spacing = radius_spacing_mm
+    if min_positions > 1 and extent > 0.0:
+        spacing = min(spacing, 2.0 * extent / (min_positions - 1))
+    return grid_positions(extent, spacing)
+
+
 def frame_from_z_axis(z_axis: np.ndarray) -> np.ndarray:
     """Right-handed rotation matrix (columns x, y, z) whose z axis is the given
     unit vector and whose x axis is the sensor x axis made perpendicular to it."""
@@ -346,35 +450,62 @@ def frame_from_z_axis(z_axis: np.ndarray) -> np.ndarray:
     return np.column_stack([x_axis, np.cross(z_axis, x_axis), z_axis])
 
 
-def sphere_depth_planes(p: PlanParameters) -> list[tuple[float, float]]:
-    """(radius, depth) of every sphere plane. The near radius covers depth_min
-    to the switch depth; the far radius starts one overlap band below the switch depth."""
-    near = [(p.near_radius_mm, d) for d in np.linspace(p.depth_min_mm, p.radius_switch_depth_mm, p.depth_planes_near)]
-    far = [(p.far_radius_mm, d) for d in np.linspace(p.radius_switch_depth_mm - p.overlap_band_mm,
-                                                     p.depth_max_mm, p.depth_planes_far)]
-    return [(float(r), float(d)) for r, d in near + far]
+def sphere_stations(p: PlanParameters) -> list[float]:
+    """Sensor-z depths of the sphere stations, nearest first: the explicit list when
+    given, otherwise the geometric ladder depth_min * ratio ** k up to depth_max,
+    with depth_max appended when the last rung is more than ladder_end_tolerance_mm
+    below it."""
+    if p.sphere_depths_mm is not None:
+        return [float(depth) for depth in p.sphere_depths_mm]
+    stations = []
+    rung = 0
+    while True:
+        # Computed from the rung number, not by repeated multiplication, so rounding does not accumulate.
+        depth = p.depth_min_mm * p.sphere_depth_ratio ** rung
+        if depth > p.depth_max_mm + GRID_ROUNDING_TOLERANCE:
+            break
+        stations.append(float(depth))
+        rung += 1
+    if p.depth_max_mm - stations[-1] > p.ladder_end_tolerance_mm:
+        stations.append(float(p.depth_max_mm))
+    return stations
 
 
-def plan_spheres(p: PlanParameters, camera: PinholeCamera) -> list[PlannedPose]:
-    """Sphere poses on a lateral grid at each depth plane (sensor frame). Rows are
-    visited in a serpentine order so consecutive poses are neighbors."""
+def plan_spheres(p: PlanParameters, camera: PinholeCamera) -> tuple[list[PlannedPose], dict[float, list[int]]]:
+    """Sphere poses (sensor frame) and, per station depth, [planned, dropped] counts.
+
+    Each station is a lateral grid; rows are visited in a serpentine order so
+    consecutive poses are neighbors. Grid poses whose silhouette would leave the
+    image are dropped (and counted). The center pose (0, 0, depth) is added when
+    the lattice has no point there, is listed first, and is never dropped."""
     poses: list[PlannedPose] = []
-    for radius, depth in sphere_depth_planes(p):
+    counts: dict[float, list[int]] = {}
+    for depth in sphere_stations(p):
         half_x, half_y = half_field_at_depth_mm(camera, depth)
-        spacing = p.spacing_in_radii * radius
-        xs = grid_positions(p.fov_fill * half_x, spacing)
-        ys = grid_positions(p.fov_fill * half_y, spacing)
+        room_x, room_y = sphere_center_room_mm(camera, depth, p.sphere_radius_mm, p.edge_margin_px,
+                                               p.room_bisection_tolerance_mm)
+        spacing = p.spacing_in_radii * p.sphere_radius_mm
+        xs = station_axis_grid(p.fov_fill * half_x, room_x, spacing, p.min_positions_per_axis)
+        ys = station_axis_grid(p.fov_fill * half_y, room_y, spacing, p.min_positions_per_axis)
+        candidates = [(float(x), float(y)) for row, y in enumerate(ys) for x in (xs if row % 2 == 0 else xs[::-1])]
+        if (0.0, 0.0) not in candidates:
+            candidates.insert(0, (0.0, 0.0))
+        counts[depth] = [len(candidates), 0]
         index = 0
-        for row, y in enumerate(ys):
-            for x in (xs if row % 2 == 0 else xs[::-1]):
-                center = np.array([x, y, depth])
-                ray = center / np.linalg.norm(center)
-                poses.append(PlannedPose(
-                    pose_id=SPHERE_ID_FORMAT.format(radius=radius, depth=depth, index=index),
-                    kind=TARGET_KIND_SPHERE, radius_mm=radius, half_size_mm=None, center_sensor=center,
-                    tool_to_sensor=frame_from_z_axis(ray), plane_depth_mm=depth))
-                index += 1
-    return poses
+        for x, y in candidates:
+            center = np.array([x, y, depth])
+            ray = center / np.linalg.norm(center)
+            pose = PlannedPose(
+                pose_id=SPHERE_ID_FORMAT.format(radius=p.sphere_radius_mm, depth=depth, index=index),
+                kind=TARGET_KIND_SPHERE, radius_mm=p.sphere_radius_mm, half_size_mm=None, center_sensor=center,
+                tool_to_sensor=frame_from_z_axis(ray), plane_depth_mm=depth)
+            is_center = (x, y) == (0.0, 0.0)
+            if not is_center and silhouette_leaves_image(camera, pose, p.edge_margin_px):
+                counts[depth][1] += 1
+                continue
+            poses.append(pose)
+            index += 1
+    return poses, counts
 
 
 def board_corners_in_view(camera: PinholeCamera, center: np.ndarray, rotation: np.ndarray,
@@ -422,14 +553,36 @@ def plan_boards(p: PlanParameters, camera: PinholeCamera) -> tuple[list[PlannedP
 
 
 def silhouette_leaves_image(camera: PinholeCamera, pose: PlannedPose, margin_px: float) -> bool:
-    """Approximate test whether a sphere's silhouette would cross the image border:
-    the apparent radius in pixels is f R / sqrt(rho^2 - R^2) for range rho."""
-    rho = float(np.linalg.norm(pose.center_sensor))
-    apparent = camera.focal_x_px * pose.radius_mm / np.sqrt(max(rho ** 2 - pose.radius_mm ** 2, MIN_VECTOR_NORM))
-    u, v, _ = camera.project(pose.center_sensor)
-    apparent_y = apparent * camera.focal_y_px / camera.focal_x_px
-    return bool(u - apparent < margin_px or u + apparent > camera.width - 1 - margin_px
-                or v - apparent_y < margin_px or v + apparent_y > camera.height - 1 - margin_px)
+    """True when a sphere's silhouette would cross the image border, or come
+    closer to it than margin_px.
+
+    The silhouette of a sphere of radius R seen from the camera center at range
+    rho is a circle of radius R sqrt(1 - R^2/rho^2) centered at (1 - R^2/rho^2)
+    times the sphere center, in the plane perpendicular to the viewing ray. The
+    circle is sampled at SILHOUETTE_SAMPLES points and projected exactly. (The
+    first version scaled a circle of radius f R / sqrt(rho^2 - R^2) around the
+    projected center, which understates the perspective stretching of the
+    silhouette away from the optical axis by up to a few pixels.) A camera
+    inside the sphere counts as leaving the image."""
+    center = pose.center_sensor
+    rho = float(np.linalg.norm(center))
+    if rho <= pose.radius_mm:
+        return True
+    axis = center / rho
+    first = np.cross(axis, SENSOR_Y_AXIS)
+    if np.linalg.norm(first) < MIN_VECTOR_NORM:
+        first = np.cross(axis, SENSOR_X_AXIS)
+    first = first / np.linalg.norm(first)
+    second = np.cross(axis, first)
+    shrink = 1.0 - (pose.radius_mm / rho) ** 2
+    angles = np.linspace(0.0, 2.0 * np.pi, SILHOUETTE_SAMPLES, endpoint=False)
+    points = (center * shrink + pose.radius_mm * np.sqrt(shrink)
+              * (np.cos(angles)[:, None] * first + np.sin(angles)[:, None] * second))
+    u, v, in_front = camera.project(points)
+    if not in_front.all():
+        return True
+    return bool(u.min() < margin_px or u.max() > camera.width - 1 - margin_px
+                or v.min() < margin_px or v.max() > camera.height - 1 - margin_px)
 
 
 def tag_holdout(poses: list[PlannedPose], fraction: float, seed: int) -> None:
@@ -468,21 +621,28 @@ def write_poses_csv(path: Path, poses: list[PlannedPose], sensor_to_base: RigidT
 
 
 def summary_text(p: PlanParameters, camera: PinholeCamera, poses: list[PlannedPose],
-                 board_counts: dict[float, list[int]], source: str, bootstrap_lines: list[str]) -> str:
-    """The plan summary: counts per depth plane and kind, skipped boards, total."""
+                 sphere_counts: dict[float, list[int]], board_counts: dict[float, list[int]], source: str,
+                 bootstrap_lines: list[str]) -> str:
+    """The plan summary: counts per sphere station and board depth, dropped spheres, skipped boards, total."""
     lines = ["Stage-1 pose plan", f"Sensor-to-base transform: {source}"]
     lines += bootstrap_lines
     half_h, half_v = camera.half_angles_degrees()
     lines.append(f"Camera: {camera.width} x {camera.height} px, half field {half_h:.1f} x {half_v:.1f} deg")
     lines.append("")
-    lines.append("Sphere poses per depth plane:")
-    lines.append(f"  {'radius_mm':>9} {'depth_mm':>9} {'count':>6} {'held out':>9}")
+    lines.append("Sphere poses per station:")
+    lines.append(f"  {'radius_mm':>9} {'depth_mm':>9} {'planned':>8} {'kept':>6} {'dropped':>8} {'held out':>9}")
     spheres = [q for q in poses if q.kind == TARGET_KIND_SPHERE]
-    for radius, depth in sphere_depth_planes(p):
-        plane = [q for q in spheres if q.radius_mm == radius and q.plane_depth_mm == depth]
-        lines.append(f"  {radius:9.0f} {depth:9.0f} {len(plane):6d} {sum(q.holdout for q in plane):9d}")
+    dropped_total = 0
+    for depth, (planned, dropped) in sphere_counts.items():
+        station = [q for q in spheres if q.plane_depth_mm == depth]
+        dropped_total += dropped
+        lines.append(f"  {p.sphere_radius_mm:9.1f} {depth:9.0f} {planned:8d} {len(station):6d} {dropped:8d} "
+                     f"{sum(q.holdout for q in station):9d}")
+    if dropped_total:
+        lines.append(f"  {dropped_total} sphere poses were dropped because the sphere would be partly outside the "
+                     f"image (margin {p.edge_margin_px:g} px); the center pose of each station is always kept.")
     lines.append("")
-    lines.append("Board poses per depth plane:")
+    lines.append("Board poses per depth:")
     lines.append(f"  {'depth_mm':>9} {'planned':>8} {'kept':>6} {'skipped':>8} {'held out':>9}")
     boards = [q for q in poses if q.kind == TARGET_KIND_BOARD]
     skipped_total = 0
@@ -497,8 +657,9 @@ def summary_text(p: PlanParameters, camera: PinholeCamera, poses: list[PlannedPo
     clipped = sum(silhouette_leaves_image(camera, q, p.edge_margin_px) for q in spheres)
     lines.append("")
     if clipped:
-        lines.append(f"{clipped} of {len(spheres)} sphere poses would be partly outside the image (approximate, "
-                     f"margin {p.edge_margin_px:g} px); lower --fov-fill if the sphere must be fully visible.")
+        lines.append(f"{clipped} of {len(spheres)} sphere poses (center poses, which are always kept) would still be "
+                     f"partly outside the image (margin {p.edge_margin_px:g} px); the sphere is too "
+                     "large for the field at those depths, so move the nearest station back or accept the clipping.")
     lines.append(f"Total: {len(poses)} poses ({len(spheres)} sphere, {len(boards)} board), "
                  f"{sum(q.holdout for q in poses)} tagged held out (seed {p.seed}).")
     return "\n".join(lines) + "\n"
@@ -525,10 +686,7 @@ def write_plan_figure(path: Path, p: PlanParameters, camera: PinholeCamera, pose
         front.plot([-half_x, half_x, half_x, -half_x, -half_x], [-half_y, -half_y, half_y, half_y, -half_y], **line)
     for sx, sy in BOARD_CORNER_SIGNS:
         front.plot([sx * half_x_min, sx * half_x_max], [sy * half_y_min, sy * half_y_max], linestyle=":", **line)
-    groups = [("sphere r=%g mm" % p.near_radius_mm, PLOT_COLOR_NEAR_SPHERE, "o",
-               lambda q: q.kind == TARGET_KIND_SPHERE and q.radius_mm == p.near_radius_mm),
-              ("sphere r=%g mm" % p.far_radius_mm, PLOT_COLOR_FAR_SPHERE, "^",
-               lambda q: q.kind == TARGET_KIND_SPHERE and q.radius_mm == p.far_radius_mm),
+    groups = [("sphere r=%g mm" % p.sphere_radius_mm, PLOT_COLOR_SPHERE, "o", lambda q: q.kind == TARGET_KIND_SPHERE),
               ("board", PLOT_COLOR_BOARD, "s", lambda q: q.kind == TARGET_KIND_BOARD)]
     for label, color, marker, selector in groups:
         chosen = [q for q in poses if selector(q)]
@@ -570,17 +728,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--image-size", type=int, nargs=2, metavar=("W", "H"), help="image width and height in pixels")
     parser.add_argument("--depth-min-mm", type=float, default=d.depth_min_mm)
     parser.add_argument("--depth-max-mm", type=float, default=d.depth_max_mm)
-    parser.add_argument("--near-radius-mm", type=float, default=d.near_radius_mm)
-    parser.add_argument("--far-radius-mm", type=float, default=d.far_radius_mm)
-    parser.add_argument("--radius-switch-depth-mm", type=float, default=d.radius_switch_depth_mm)
-    parser.add_argument("--overlap-band-mm", type=float, default=d.overlap_band_mm,
-                        help="both radii are planned in this band below the switch depth")
+    parser.add_argument("--sphere-radius-mm", type=float, default=d.sphere_radius_mm,
+                        help="radius of the single calibration sphere")
+    parser.add_argument("--sphere-depth-ratio", type=float, default=d.sphere_depth_ratio,
+                        help="ratio of consecutive sphere stations of the geometric ladder from --depth-min-mm")
+    parser.add_argument("--ladder-end-tolerance-mm", type=float, default=d.ladder_end_tolerance_mm,
+                        help="--depth-max-mm is appended as a last station when the ladder ends further below it")
+    parser.add_argument("--sphere-depths-mm", type=float, nargs="+", default=None,
+                        help="explicit sphere station depths; replaces the ladder")
     parser.add_argument("--spacing-in-radii", type=float, default=d.spacing_in_radii,
-                        help="grid spacing as a multiple of the radius in use")
+                        help="grid spacing as a multiple of the sphere radius")
     parser.add_argument("--fov-fill", type=float, default=d.fov_fill,
                         help="fraction of the half field covered by sphere centers at each depth")
-    parser.add_argument("--depth-planes-near", type=int, default=d.depth_planes_near)
-    parser.add_argument("--depth-planes-far", type=int, default=d.depth_planes_far)
+    parser.add_argument("--min-positions-per-axis", type=int, default=d.min_positions_per_axis,
+                        help="least number of sphere positions along each image axis at a station; the spacing "
+                             "shrinks where the sphere's image leaves little room")
+    parser.add_argument("--room-bisection-tolerance-mm", type=float, default=d.room_bisection_tolerance_mm,
+                        help="precision of the search for the room the sphere's image leaves inside the border")
     parser.add_argument("--board-half-size-mm", type=float, nargs=2, default=d.board_half_size_mm,
                         metavar=("HALF_WIDTH", "HALF_HEIGHT"))
     parser.add_argument("--board-depths-mm", type=float, nargs="+", default=d.board_depths_mm)
@@ -591,7 +755,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--board-lateral-fill", type=float, default=d.board_lateral_fill,
                         help="fraction of the half field covered by board centers at each depth")
     parser.add_argument("--edge-margin-px", type=float, default=d.edge_margin_px,
-                        help="board corners must project this far inside the image")
+                        help="board corners and sphere silhouettes must project this far inside the image")
     parser.add_argument("--holdout-fraction", type=float, default=d.holdout_fraction)
     parser.add_argument("--seed", type=int, default=d.seed, help="seed of the random held-out subset")
     parser.add_argument("--bootstrap-residual-warn-mm", type=float, default=d.bootstrap_residual_warn_mm)
@@ -601,10 +765,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def parameters_from_arguments(args: argparse.Namespace) -> PlanParameters:
     return PlanParameters(
-        depth_min_mm=args.depth_min_mm, depth_max_mm=args.depth_max_mm, near_radius_mm=args.near_radius_mm,
-        far_radius_mm=args.far_radius_mm, radius_switch_depth_mm=args.radius_switch_depth_mm,
-        overlap_band_mm=args.overlap_band_mm, spacing_in_radii=args.spacing_in_radii, fov_fill=args.fov_fill,
-        depth_planes_near=args.depth_planes_near, depth_planes_far=args.depth_planes_far,
+        depth_min_mm=args.depth_min_mm, depth_max_mm=args.depth_max_mm, sphere_radius_mm=args.sphere_radius_mm,
+        sphere_depth_ratio=args.sphere_depth_ratio, ladder_end_tolerance_mm=args.ladder_end_tolerance_mm,
+        sphere_depths_mm=None if args.sphere_depths_mm is None else tuple(args.sphere_depths_mm),
+        spacing_in_radii=args.spacing_in_radii, fov_fill=args.fov_fill,
+        min_positions_per_axis=args.min_positions_per_axis, room_bisection_tolerance_mm=args.room_bisection_tolerance_mm,
         board_half_size_mm=tuple(args.board_half_size_mm), board_depths_mm=tuple(args.board_depths_mm),
         board_tilts_deg=tuple(args.board_tilts_deg), board_azimuths_deg=tuple(args.board_azimuths_deg),
         board_lateral_positions=args.board_lateral_positions, board_lateral_fill=args.board_lateral_fill,
@@ -620,12 +785,12 @@ def main(argv: list[str] | None = None) -> int:
         sensor_to_base, source, bootstrap_lines = load_sensor_in_base(args.sensor_in_base,
                                                                       params.bootstrap_residual_warn_mm)
         camera = camera_from_arguments(args)
-        poses = plan_spheres(params, camera)
+        poses, sphere_counts = plan_spheres(params, camera)
         board_poses, board_counts = plan_boards(params, camera)
         poses += board_poses
         ids = [q.pose_id for q in poses]
         if len(set(ids)) != len(ids):
-            raise PlanInputError("two planned poses got the same pose id (depth planes or tilts that round to the "
+            raise PlanInputError("two planned poses got the same pose id (stations, depths or tilts that round to the "
                                  "same whole millimeter or degree); space the depths and angles further apart")
     except PlanInputError as error:
         print(f"ERROR: {error}", file=sys.stderr)
@@ -633,7 +798,7 @@ def main(argv: list[str] | None = None) -> int:
     tag_holdout(poses, params.holdout_fraction, params.seed)
     args.out.mkdir(parents=True, exist_ok=True)
     write_poses_csv(args.out / PLAN_CSV_NAME, poses, sensor_to_base)
-    text = summary_text(params, camera, poses, board_counts, source, bootstrap_lines)
+    text = summary_text(params, camera, poses, sphere_counts, board_counts, source, bootstrap_lines)
     (args.out / PLAN_SUMMARY_NAME).write_text(text, encoding="utf-8")
     print(text, end="")
     try:

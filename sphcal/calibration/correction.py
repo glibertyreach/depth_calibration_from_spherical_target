@@ -232,7 +232,8 @@ def fit_correction(capture_set: CaptureSet, params: CorrectionFitParameters,
     width, height = camera.width, camera.height
     samples = build_correction_samples(training_set, transform, params.samples)
     model = build_model(params.model, samples.inputs, width, height,
-                        metadata={"gauge": "sensor frame; the map's rigid component is folded into the transform"})
+                        metadata={"gauge": "sensor frame; the map's rigid component is folded into the transform"},
+                        camera=camera)
     system = FixedDesignSystem(model.design(samples.inputs), samples.weight)
     if params.smoothing.method == "pose_cv":
         model = select_smoothing_by_pose_cv(model, samples, params.smoothing, system)

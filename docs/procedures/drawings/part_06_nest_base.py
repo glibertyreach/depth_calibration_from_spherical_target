@@ -5,7 +5,7 @@ is SECTION A-A through the center and the ball at 90 degrees; viewed from the +x
 side, so +y is to the right.  In the elevation, u = y (horizontal, from the center)
 and v = height above the plate top, so the plate occupies v from -PLATE_T to 0.
 
-Sphere seating heights are computed, not typed:  a sphere of radius R resting on the
+The sphere's seating height is computed, not typed:  a sphere of radius R resting on the
 three balls (radius r, center height h_b, on a pitch circle of radius p) has its
 center at   z = h_b + sqrt((R + r)^2 - p^2)   above the plate top.
 """
@@ -33,8 +33,7 @@ BOLT_SQUARE = 100.0  # bolt hole square
 BOLT_HOLE_D = 9.0  # through hole for M8
 BOLT_CBORE_D = 15.0  # counterbore diameter
 BOLT_CBORE_DEPTH = 9.0  # counterbore depth from the top
-SPHERE_A_R = 38.1  # sphere A radius (Ø76.2)
-SPHERE_B_R = 76.2  # sphere B radius (Ø152.4)
+SPHERE_B_R = 76.2  # sphere B radius (Ø152.4), the only calibration sphere (decision D-15)
 TOL_POCKET = "H7"  # pocket tolerance
 TILT_NOTE_ANGLE = 40  # wrist tilt used to choose the bolt-down location, degrees
 
@@ -68,8 +67,7 @@ DIM_BOTTOM_2 = -17.0  # bolt spacing dimension, second row below the plan (paper
 DIM_RIGHT = 6.0  # bolt spacing dimension right of the plan (paper)
 ELEV_DIM_BOTTOM = -8.0  # plate width dimension below the plate (paper)
 ELEV_DIM_THICK = -8.0  # plate thickness dimension left of the plate (paper)
-ELEV_DIM_A = -22.0  # sphere A center height dimension, left of the plate edge (paper)
-ELEV_DIM_B = -33.0  # sphere B center height dimension (paper)
+ELEV_DIM_B = -22.0  # sphere B center height dimension, left of the plate edge (paper)
 ELEV_DIM_BASE_U = -PLATE_W / 2  # u used as the base of the left dimension columns
 CENTER_EXT_PLAN = 5.0  # plan centerlines extend this far past the plate (model mm)
 TEXT_POS_DIM = 0.3  # position of dimension text along its dimension line
@@ -79,7 +77,7 @@ BALL_LEADER_ANGLE = 40.0  # angle on the ball where its callout lands
 BALL_OUTLINE_STEP_DEG = 3  # angular step of the ball outline
 CENTER_V_EXT = 4.0  # elevation axis extends this far below the plate (model mm)
 UPPER_RIGHT_BOLT = 3  # index of the (+x, +y) bolt hole in the bolt list
-CALLOUT_Y = {"sphere_b": 200.0, "sphere_a": 150.0, "ball": 118.0, "pocket": 88.0}  # paper y of the callout texts
+CALLOUT_Y = {"sphere_b": 200.0, "ball": 118.0, "pocket": 88.0}  # paper y of the callout texts
 CENTER_MARK_R = 3.0  # half size of a sphere center cross, model mm
 SIGHT_LEFT = (-1.0, 0.0)  # viewing direction arrows (looking toward -x)
 
@@ -99,7 +97,6 @@ def build(out_dir: str) -> list[str]:
     pr = POCKET_PCD / 2
     br = BALL_D / 2
     half_sq = BOLT_SQUARE / 2
-    z_a = sphere_center_height(SPHERE_A_R)
     z_b = sphere_center_height(SPHERE_B_R)
     pockets = [polar((0, 0), pr, a) for a in POCKET_ANGLES]
     bolts = [(sx * half_sq, sy * half_sq) for sx in (-1, 1) for sy in (-1, 1)]
@@ -152,24 +149,21 @@ def build(out_dir: str) -> list[str]:
     el.hatch(ball_pts, other=True)
     el.polyline(ball_pts, "outline", closed=True)
     el.center_cross((pk, BALL_CENTER_H), 0.0)
-    # phantom spheres (alternatives: A and B are never on the base at the same time)
-    for r, z in ((SPHERE_A_R, z_a), (SPHERE_B_R, z_b)):
-        el.circle((0.0, z), r, "phantom")
-        el.line((-CENTER_MARK_R, z), (CENTER_MARK_R, z), "center")
-        el.line((0.0, z - CENTER_MARK_R), (0.0, z + CENTER_MARK_R), "center")
+    # phantom sphere B, seated on the three balls
+    el.circle((0.0, z_b), SPHERE_B_R, "phantom")
+    el.line((-CENTER_MARK_R, z_b), (CENTER_MARK_R, z_b), "center")
+    el.line((0.0, z_b - CENTER_MARK_R), (0.0, z_b + CENTER_MARK_R), "center")
     el.center_v(-PLATE_T - CENTER_V_EXT, z_b + 2 * CENTER_MARK_R, 0.0)
 
     # dimensions
     el.dim_h(-hw, hw, -PLATE_T, -PLATE_T, ELEV_DIM_BOTTOM, _fmt(PLATE_W), text_pos=TEXT_POS_DIM)
     el.dim_v(-hw, -hw, -PLATE_T, 0.0, ELEV_DIM_THICK, _fmt(PLATE_T), text_pos=0.5)
-    el.dim_v(-hw, 0.0, 0.0, z_a, ELEV_DIM_A, f"{z_a:.1f}", base_u=-hw, text_pos=0.5)
     el.dim_v(-hw, 0.0, 0.0, z_b, ELEV_DIM_B, f"{z_b:.1f}", base_u=-hw, text_pos=0.5)
     # callouts in the right-hand column
     def right_callout(target, text, y_text):
         tp = el.P(*target)
         return el.leader(target, text, RIGHT_TEXT_X - tp[0] - d.LEADER_SHOULDER - d.LEADER_TEXT_GAP, y_text - tp[1])
     right_callout((SPHERE_B_R, z_b), f"SPHERE B R{_fmt(SPHERE_B_R)} (PHANTOM)\nCENTER {z_b:.1f} ABOVE PLATE TOP", CALLOUT_Y["sphere_b"])
-    right_callout((SPHERE_A_R, z_a), f"SPHERE A R{_fmt(SPHERE_A_R)} (PHANTOM)\nCENTER {z_a:.1f} ABOVE PLATE TOP", CALLOUT_Y["sphere_a"])
     right_callout((pk + br * math.cos(math.radians(BALL_LEADER_ANGLE)), BALL_CENTER_H + br * math.sin(math.radians(BALL_LEADER_ANGLE))),
                   f"BALL Ø{_fmt(BALL_D)}, GRADE 25 (52100), 3 OFF\nBONDED WITH ANAEROBIC\n"
                   f"RETAINING COMPOUND\nCENTER {_fmt(BALL_CENTER_H)} ABOVE PLATE TOP", CALLOUT_Y["ball"])
@@ -183,9 +177,9 @@ def build(out_dir: str) -> list[str]:
     notes = [
         f"Balls: Ø{_fmt(BALL_D)} grade 25 bearing balls (52100), 3 off, bonded into the pockets with anaerobic "
         f"retaining compound. Ball center is {_fmt(BALL_CENTER_H)} above the plate top.",
-        f"Seating heights of the sphere centers above the plate top, z = {_fmt(BALL_CENTER_H)} + "
-        f"√((R + {_fmt(br)})² − {_fmt(pr)}²): sphere A (R {_fmt(SPHERE_A_R)}) {z_a:.1f}; sphere B "
-        f"(R {_fmt(SPHERE_B_R)}) {z_b:.1f}. Spheres are shown phantom, one at a time.",
+        f"Seating height of the sphere center above the plate top, z = {_fmt(BALL_CENTER_H)} + "
+        f"√((R + {_fmt(br)})² − {_fmt(pr)}²): sphere B (R {_fmt(SPHERE_B_R)}) {z_b:.1f}. "
+        f"The sphere is shown phantom.",
         f"Fasten with M8 socket cap screws into tapped holes in the cell table (4 × Ø{_fmt(BOLT_HOLE_D)} on a "
         f"{_fmt(BOLT_SQUARE)} × {_fmt(BOLT_SQUARE)} square).",
         f"Bolt down where the robot reaches with the wrist down and tilted {TILT_NOTE_ANGLE} degrees to either side.",

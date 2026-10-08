@@ -550,10 +550,16 @@ def _detail_sphere_b(sh: Sheet, pole: tuple[float, float]) -> None:
             weight="bold")
 
 
-def build_all(out_dir: str) -> dict[str, list[str]]:
-    """Draw SC1-03 and SC1-04."""
-    return {SPEC_03.number: build_stem(SPEC_03, out_dir, True),
-            SPEC_04.number: build_stem(SPEC_04, out_dir, False)}
+def build_all(out_dir: str, include_archived: bool = False) -> dict[str, list[str]]:
+    """Draw SC1-04, and SC1-03 as well when ``include_archived`` is true.
+
+    SC1-03 (sphere A) was archived when the calibration moved to one sphere (decision
+    D-15); its specification is kept so that the archived sheet can be regenerated.
+    """
+    results = {SPEC_04.number: build_stem(SPEC_04, out_dir, False)}
+    if include_archived:
+        results[SPEC_03.number] = build_stem(SPEC_03, out_dir, True)
+    return results
 
 
 if __name__ == "__main__":

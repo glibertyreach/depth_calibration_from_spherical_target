@@ -76,15 +76,32 @@ tests/
   measured point along the pixel's ray. The correction output is delta_rho,
   to be added to rho_m (D-4: evaluated at native pixels).
 - Map inputs, in this order, all from measured quantities at runtime:
-  0 u (px), 1 v (px), 2 rho_m (mm), 3 s_u, 4 s_v, 5 curvature (1/mm).
+  0 u (px), 1 v (px), 2 rho_m (mm), 3 s_u, 4 s_v, 5 kappa_m (mm/px^2).
   s_u and s_v are the dimensionless slope components of the measured surface
   in the local ray frame: with dz/du and dz/dv the depth gradients in mm per
   pixel from a plane fit over the slope window, s_u = (dz/du) * f_x / z and
   s_v = (dz/dv) * f_y / z. For a surface tilted by angle theta along u this
   is tan(theta) (small-field approximation; the exact form is a coordinate
   choice and does not need to be physical). Incidence cos(alpha) =
-  1 / sqrt(1 + s_u^2 + s_v^2). Curvature during calibration is 1/R for a
-  sphere and 0 for a board; at runtime the caller supplies an estimate or 0.
+  1 / sqrt(1 + s_u^2 + s_v^2).
+  The sixth input, named "curvature", is the MEASUREMENT-SPACE curvature
+  kappa_m = (rho_m / f_mean)^2 * (1 / R), in millimeters of depth per pixel
+  squared, where R is the physical radius of curvature of the surface (1 / R is
+  0 for a plane) and f_mean = sqrt(fx * fy) is the geometric mean of the
+  camera's focal lengths in pixels. Reason (D-15 to D-17): the sensor averages
+  depth over a kernel fixed in PIXELS, so the bias it causes on a curved
+  surface depends on the curvature of the depth profile per pixel, which is
+  (Z / f)^2 / R, not on 1 / R. With the physical curvature as input and one
+  calibration sphere (radius 76.2 mm), the input would take two values (0 on
+  boards, 1 / 76.2 on the sphere) at every range, so a sweep through ranges
+  could not inform the term; kappa_m varies with range even for one sphere.
+  Range stays a separate axis of the curvature term. During calibration 1 / R
+  is the known target's curvature (a sphere's reciprocal radius, 0 for a
+  board) and rho_m is the sample's measured range. At runtime the caller
+  supplies the physical curvature estimate or 0 (`correct_frame` takes it per
+  pixel or as a scalar) and the evaluator forms kappa_m per pixel with that
+  pixel's measured range. The no-read samples, indexed by predicted geometry,
+  use the predicted range.
 - Residual target for a sample on a sphere: rho_true - rho_m, where rho_true
   is the near intersection of the pixel ray with the known sphere (center
   transformed into the sensor frame by T_sp^-1). For a board: intersection
@@ -147,6 +164,9 @@ def image_slopes(depth_image, valid, camera, params) -> tuple[np.ndarray, np.nda
     # implemented as a least-squares plane fit of z over (u, v) in the window, vectorized (integral images or
     # scipy.ndimage.uniform_filter on the normal-equation sums), masked by validity
 def range_from_depth(depth_image, camera) -> np.ndarray      # rho = z * |ray| per pixel
+def measurement_space_curvature(curvature_per_mm, range_mm, focal_px)
+    # (range_mm / focal_px)^2 * curvature_per_mm, mm/px^2, elementwise with broadcasting; the camera's focal_px
+    # is PinholeCamera.mean_focal_px = sqrt(fx * fy)
 def block_independence_weight(effective_block_px: int) -> float   # 1 / block^2
 ```
 
@@ -174,7 +194,7 @@ class BSplineBasis1D:
     difference_penalty(order) -> scipy.sparse matrix (n_coefficients, n_coefficients)  # D^T D, P-spline penalty
 
 class TensorTerm:
-    name: str; input_indices: tuple[int, ...]; bases: list[BSplineBasis1D]
+    name: str; input_indices: tuple[int, ...]; bases: list[BSplineBasis1D]   # the bases may differ in degree
     penalty_order: int; smoothing: list[float]   # one smoothing parameter per dimension
     n_coefficients: int
     design(X) -> csr_matrix (N, n_coefficients)   # X (N, D) full input matrix; row-wise Kronecker of the 1-D designs
@@ -266,11 +286,21 @@ steps S1 to S7 of the analysis document.
 
 ## 6. Default model configuration (a-theoretical; the data choose by GCV and held-out error)
 
-Terms, each a tensor-product cubic B-spline with second-order difference penalties:
-- position: inputs (u, v, rho), intervals (8, 6, 6)
-- slope: inputs (s_u, s_v, rho), intervals (6, 6, 4), with s bounded by tan of the cut-off
-- curvature: inputs (curvature, s_u, s_v), intervals (1, 4, 4) (linear in curvature)
+Terms, each a tensor-product B-spline with second-order difference penalties.
+`TermSpec.degree` is one integer for all axes of a term or one integer per axis:
+- position: inputs (u, v, rho), cubic, intervals (8, 6, 6)
+- slope: inputs (s_u, s_v, rho), cubic, intervals (6, 6, 4), with s bounded by tan of the cut-off
+- curvature: inputs (kappa_m, rho, s_u, s_v), degrees (1, 3, 3, 3), intervals (1, 4, 4, 4): linear in
+  measurement-space curvature (one interval, two coefficients along that axis) and cubic in range and in
+  the two slopes. Range is a separate axis because the bias of the pixel-fixed averaging kernel depends on
+  range as well as on kappa_m. Range knots follow the quantile placement used for the range input in every
+  term. The kappa_m axis spans [0, `curvature_upper_mm_per_px2`], default 0.5 mm/px^2, which covers a 20 mm
+  radius out to about 2,200 mm at a 688 px focal length ((2200 / 688)^2 / 20 = 0.51); the axis is linear, so
+  a generous bound costs nothing.
 - optional full interaction: inputs (u, v, rho, s_u, s_v), intervals (4, 3, 3, 3, 3), off by default
+The read-probability (no-read) map uses position (4, 3, 4), slope (8, 8, 3) and the same curvature term
+with intervals (1, 3, 3, 3). It was checked on the synthetic campaign: the fit stays stable and the
+onsets move by at most 1 degree against the previous inputs.
 The comparison between configurations is by held-out residual (section 7.6 of
 the analysis).
 
@@ -281,12 +311,27 @@ the analysis).
   "format": "sphcal-map", "version": 1,
   "inputs": [{"name": "u", "lower": 0, "upper": 639, "unit": "px"}, ...],
   "output": {"name": "delta_range", "unit": "mm", "applies_to": "range along the pixel ray, added to the measured range"},
-  "terms": [{"name": "position", "input_indices": [0, 1, 2], "degree": 3,
-             "knots": [[...], [...], [...]], "coefficients": [... row-major over the term's dimensions ...]}, ...],
+  "terms": [{"name": "position", "input_indices": [0, 1, 2], "degrees": [3, 3, 3], "degree": 3,
+             "knots": [[...], [...], [...]], "coefficients": [... row-major over the term's dimensions ...]},
+            {"name": "curvature", "input_indices": [5, 2, 3, 4], "degrees": [1, 3, 3, 3],
+             "knots": [[...], [...], [...], [...]], "coefficients": [...]}, ...],
+  "camera": {"width": 640, "height": 480, "fx": 688.155, "fy": 688.083, "cx": 292.316, "cy": 256.759},
   "domain_note": "evaluate only inside the input bounds; outside, clamp inputs to the bounds",
   "metadata": {"unit_id": "...", "fitted_on": "...", "gauge": "sensor frame, zero mean displacement and rotation", ...}
 }
 ```
+"degrees" has one B-spline degree per dimension of the term, in the order of "input_indices" and "knots"; the
+single integer "degree" is written in addition only when all dimensions share it, and an evaluator reads
+"degrees" when present, otherwise "degree". Older files with only "degree" still load.
+
+Camera block and the sixth input. The evaluator must form input 5 itself. With the camera block it
+computes, per pixel, f_mean = sqrt(fx * fy) once, then
+
+    kappa_m = (rho_m / f_mean)^2 * physical_curvature        (mm/px^2; physical_curvature = 1 / R in 1/mm, 0 for a plane)
+
+where rho_m is that pixel's measured range (input 2) and physical_curvature is what the caller supplies (a
+scalar or per pixel). The block is written for the correction map and the no-read map; it is absent only
+when a map was built without a camera.
 Evaluation rule: for each term, for each dimension find the knot span of the
 (clamped) input, evaluate the degree+1 nonzero B-spline basis values by the
 Cox-de Boor recursion, multiply the basis values across dimensions, and sum
@@ -346,3 +391,22 @@ poses take a few minutes on a 4-core machine. No GPU is involved in the fit;
 the target GPU named in the pose-determination specification (GTX 1660 Ti
 class, Turing, compute capability 7.5, 6 GB, single precision) is relevant to
 the runtime evaluator, whose per-pixel work is trivially parallel.
+
+## 11. Changes of 2026-10-08 (one calibration sphere; measurement-space curvature)
+
+- One calibration sphere, radius 76.2 mm (sphere B), swept through a geometric ladder of depths (D-15 to
+  D-17). `sphcal.cli.plan_poses` plans one sphere radius at stations 300 mm times (2^(1/4))^k up to 1100 mm,
+  with 1100 mm appended when the last rung is more than 20 mm short of it (300, 357, 424, 505, 600, 714, 849,
+  1009, 1100 mm); `--sphere-depths-mm` replaces the ladder. Each station is a lateral grid, fitted to the
+  room the sphere's image leaves inside the image border (found by bisection with the exact silhouette test):
+  the grid spans the smaller of `fov_fill` of the half field and that room, at a spacing of 1.5 radii shrunk
+  where needed so that at least `min_positions_per_axis` (default 3) positions lie along each image axis. Near
+  range therefore keeps a 3 x 3 grid of overlapping placements instead of only the center. Grid poses whose
+  silhouette would still leave the image are dropped, and the center pose (0, 0, depth) is always kept. The default
+  board depths gain 425 mm. The two-radius mode is removed. The clipping test projects the exact silhouette
+  circle (the earlier radius-scaled approximation let through poses that overshot the border by up to about
+  3 px at the 424 mm station).
+- The map's sixth input is measurement-space curvature (section 4); `correct_frame` still takes the physical
+  curvature and converts it per pixel. The map JSON stores per-dimension degrees and a camera block
+  (section 7). The end-to-end synthetic test's injected field still uses the physical curvature 1/R; the test
+  converts the sample input back with the measured range before calling it.

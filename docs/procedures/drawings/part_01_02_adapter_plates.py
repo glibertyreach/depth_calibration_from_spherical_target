@@ -410,9 +410,14 @@ def build_adapter(spec: AdapterSpec, out_dir: str) -> list[str]:
     return sh.save(os.path.join(out_dir, spec.file_name))
 
 
-def build_all(out_dir: str) -> dict[str, list[str]]:
-    """Draw SC1-01 and SC1-02."""
-    return {s.number: build_adapter(s, out_dir) for s in (SPEC_01, SPEC_02)}
+def build_all(out_dir: str, include_archived: bool = False) -> dict[str, list[str]]:
+    """Draw SC1-02, and SC1-01 as well when ``include_archived`` is true.
+
+    SC1-01 (sphere A) was archived when the calibration moved to one sphere (decision
+    D-15); its specification is kept so that the archived sheet can be regenerated.
+    """
+    specs = (SPEC_01, SPEC_02) if include_archived else (SPEC_02,)
+    return {s.number: build_adapter(s, out_dir) for s in specs}
 
 
 if __name__ == "__main__":

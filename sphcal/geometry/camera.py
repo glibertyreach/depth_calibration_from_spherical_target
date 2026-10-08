@@ -29,6 +29,24 @@ class PinholeCamera:
     principal_x_px: float
     principal_y_px: float
 
+    @property
+    def mean_focal_px(self) -> float:
+        """Focal length in pixels used wherever one scalar focal length is needed:
+        the geometric mean sqrt(fx * fy) of the two axes. The correction map's
+        measurement-space curvature input uses it (see
+        sphcal.features.depth_features.measurement_space_curvature); fx and fy
+        differ by well under one percent on real sensors, so the choice of mean
+        hardly matters, but it must be the same one everywhere, including in the
+        runtime evaluator."""
+        return float(np.sqrt(self.focal_x_px * self.focal_y_px))
+
+    def map_block(self) -> dict:
+        """The camera entries stored in a map file's "camera" block: image size,
+        focal lengths and principal point in pixels, so that a runtime evaluator
+        can form the measurement-space curvature input from the map alone."""
+        return {"width": self.width, "height": self.height, "fx": self.focal_x_px, "fy": self.focal_y_px,
+                "cx": self.principal_x_px, "cy": self.principal_y_px}
+
     @classmethod
     def from_matcloud_header(cls, header: dict, width_px: int, height_px: int) -> "PinholeCamera":
         """Build from the header keys fx, fy, cx, cy, which every real capture

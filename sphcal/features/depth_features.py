@@ -206,3 +206,33 @@ def block_independence_weight(effective_block_px: int) -> float:
     if effective_block_px < 1:
         raise ValueError("effective_block_px must be at least 1")
     return 1.0 / float(effective_block_px) ** 2
+
+
+def measurement_space_curvature(curvature_per_mm, range_mm, focal_px):
+    """
+    Curvature of a surface expressed in the sensor's own measurement space,
+    kappa_m = (range / focal)^2 * curvature, in millimeters of depth per pixel
+    squared (mm/px^2). Scalars and arrays broadcast against each other.
+
+    Definition. For a surface of physical radius of curvature R = 1 / curvature
+    seen at range Z, one pixel step spans Z / f millimeters on the surface (f
+    the focal length in pixels), and the surface departs from its tangent plane
+    by about (step)^2 / (2 R) over a step. So the second difference of depth
+    per pixel is (Z / f)^2 / R = (Z / f)^2 * curvature, which is kappa_m.
+
+    Why this is the map's curvature input. The sensor averages depth over a
+    kernel that is fixed in PIXELS, and the bias that averaging causes on a
+    curved surface is proportional to the curvature of the depth profile per
+    pixel, kappa_m, not to the physical curvature 1 / R. With the physical
+    curvature as input and one calibration sphere, the input would take only
+    two values (0 on boards, 1 / R on the sphere) at every range, so a sweep of
+    the sphere through many ranges could not inform the curvature term; kappa_m
+    varies with range even for one sphere, and range stays a separate axis of
+    the curvature term.
+
+    The focal length is the caller's choice of scalar; the project uses the
+    geometric mean of the camera's fx and fy (PinholeCamera.mean_focal_px).
+    Units: curvature_per_mm in 1/mm, range_mm in mm, focal_px in px; result in
+    mm/px^2.
+    """
+    return (np.asarray(range_mm, dtype=np.float64) / focal_px) ** 2 * np.asarray(curvature_per_mm, dtype=np.float64)

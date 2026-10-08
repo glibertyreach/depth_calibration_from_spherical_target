@@ -26,6 +26,19 @@ r_{D-1}) of coefficient[flat index of (i_0 - degree + r_0, ...)] times the
 product over d of N_d[r_d], where the flat index is row-major with the first
 dimension slowest. The map value is the sum of the term values.
 
+Degrees. Each term stores "degrees", one B-spline degree per dimension (a term
+may be linear in one input and cubic in the others, as the curvature term is),
+and, when all dimensions share one degree, also the single integer "degree".
+An evaluator reads "degrees" when present and otherwise "degree". In the
+evaluation rule above, "degree" is the degree of the dimension being evaluated,
+and the term value sums over prod(degree_d + 1) combinations.
+
+Camera block. When the model was built for a known camera, the top-level key
+"camera" holds {"width", "height", "fx", "fy", "cx", "cy"} in pixels. A runtime
+evaluator needs fx and fy to form the map's sixth input, the measurement-space
+curvature kappa_m = (range / f_mean)^2 * physical_curvature, with f_mean =
+sqrt(fx * fy). The block is absent when the camera is unknown.
+
 Extensions to the format of section 7 (ignored by an evaluator): each term also
 stores "penalty_order" and "smoothing" so a model can be refitted after a round
 trip; the top-level keys "format", "version", "inputs", "output", "terms",
@@ -94,6 +107,9 @@ class SumOfTermsSpline:
         Free-form, stored verbatim in the JSON file.
     output : dict
         Description of the output quantity (JSON "output" key).
+    camera : dict or None
+        The camera the map was built for (JSON "camera" key; see the module
+        docstring), or None when unknown.
     """
 
     inputs: list
@@ -101,6 +117,7 @@ class SumOfTermsSpline:
     coefficients: np.ndarray = None
     metadata: dict = field(default_factory=dict)
     output: dict = field(default_factory=lambda: dict(DEFAULT_OUTPUT))
+    camera: dict | None = None
 
     def __post_init__(self) -> None:
         self.inputs = list(self.inputs)
@@ -163,21 +180,21 @@ class SumOfTermsSpline:
         """The JSON document (design document section 7) as a dict."""
         terms = []
         for term, term_slice in zip(self.terms, self.term_slices()):
-            degrees = {basis.degree for basis in term.bases}
-            if len(degrees) != 1:
-                raise ValueError(f"term {term.name!r}: the JSON format has one degree per term")
-            terms.append(
-                {
-                    "name": term.name,
-                    "input_indices": list(term.input_indices),
-                    "degree": degrees.pop(),
-                    "knots": [basis.knots.tolist() for basis in term.bases],
-                    "coefficients": self.coefficients[term_slice].tolist(),
-                    "penalty_order": term.penalty_order,
-                    "smoothing": list(term.smoothing),
-                }
-            )
-        return {
+            degrees = [basis.degree for basis in term.bases]
+            entry = {
+                "name": term.name,
+                "input_indices": list(term.input_indices),
+                "degrees": degrees,
+                "knots": [basis.knots.tolist() for basis in term.bases],
+                "coefficients": self.coefficients[term_slice].tolist(),
+                "penalty_order": term.penalty_order,
+                "smoothing": list(term.smoothing),
+            }
+            if len(set(degrees)) == 1:
+                # A single shared degree is also written in the original "degree" key.
+                entry["degree"] = degrees[0]
+            terms.append(entry)
+        document = {
             "format": FORMAT_NAME,
             "version": FORMAT_VERSION,
             "inputs": [
@@ -189,6 +206,9 @@ class SumOfTermsSpline:
             "domain_note": DOMAIN_NOTE,
             "metadata": self.metadata,
         }
+        if self.camera is not None:
+            document["camera"] = dict(self.camera)
+        return document
 
     @classmethod
     def from_dict(cls, document: dict) -> "SumOfTermsSpline":
@@ -204,7 +224,8 @@ class SumOfTermsSpline:
         terms = []
         coefficient_blocks = []
         for entry in document["terms"]:
-            bases = [BSplineBasis1D(entry["degree"], knots) for knots in entry["knots"]]
+            degrees = entry.get("degrees", [entry.get("degree")] * len(entry["knots"]))
+            bases = [BSplineBasis1D(degree, knots) for degree, knots in zip(degrees, entry["knots"])]
             terms.append(
                 TensorTerm(
                     name=entry["name"],
@@ -222,6 +243,7 @@ class SumOfTermsSpline:
             coefficients=coefficients,
             metadata=document.get("metadata", {}),
             output=document.get("output", dict(DEFAULT_OUTPUT)),
+            camera=document.get("camera"),
         )
 
     def to_json(self, path) -> None:
