@@ -16,12 +16,12 @@
    "title": "The session produces data plus an exact table of poses",
    "stats": [
     {
-     "value": "186",
+     "value": "200",
      "label": "robot poses, 5 frames each"
     },
     {
      "value": "~2 h",
-     "label": "session time including fixture changes and checks"
+     "label": "session time including the fixture change and checks"
     },
     {
      "value": "0.1 mm",
@@ -45,8 +45,8 @@
     },
     {
      "n": 2,
-     "head": "Mount spheres",
-     "text": "Doweled adapter and stem; find each sphere's TCP in the nest"
+     "head": "Mount sphere",
+     "text": "Doweled adapter and stem; find the sphere's TCP in the nest"
     },
     {
      "n": 3,
@@ -61,12 +61,12 @@
     {
      "n": 5,
      "head": "Plan poses",
-     "text": "The plan tool writes 186 poses and a picture"
+     "text": "The plan tool writes 200 poses and a picture"
     },
     {
      "n": 6,
      "head": "Capture",
-     "text": "Sphere A, then sphere B, then the board"
+     "text": "The sphere through nine stations, then the board"
     },
     {
      "n": 7,
@@ -125,7 +125,7 @@
    "id": "tcp",
    "layout": "title_only",
    "section": "Setup",
-   "title": "The three-ball nest finds each sphere's center",
+   "title": "The three-ball nest finds the sphere's center",
    "image": "assets/fixtures_b_tcp.png",
    "steps": [
     {
@@ -146,7 +146,7 @@
     },
     {
      "n": 5,
-     "text": "Save TCP_SPHERE_A_76mm and TCP_SPHERE_B_152mm"
+     "text": "Save it as TCP_SPHERE_B_152mm"
     }
    ],
    "notes": "The robot cannot see the sphere, so its center is found mechanically. A sphere resting on three fixed balls always has its center at the same point, whatever direction its stem points. The robot's built-in multi-orientation tool-center-point routine finds the one point on the tool that stays still while the wrist turns, and seating the sphere in the nest from several directions makes that point the sphere's center. Lower the sphere gently for the last millimeter; pressing down bends the stem. The usual causes of a large routine error are a sphere not fully seated or a loose adapter."
@@ -178,11 +178,11 @@
     },
     {
      "id": "boot02",
-     "text": "About 150 mm to the left"
+     "text": "About 100 mm to the left"
     },
     {
      "id": "boot03",
-     "text": "About 150 mm up"
+     "text": "About 60 mm up"
     },
     {
      "id": "boot04",
@@ -194,30 +194,30 @@
     "The check tool fits the sphere centers; the plan tool fits the sensor position",
     "Residuals of a few millimeters are fine; tens of millimeters mean a copying error or a wrong TCP"
    ],
-   "notes": "The software determines the sensor's exact position from the full capture set; this step only needs a rough position so that the planned poses land inside the field of view. Four positions not on a line are enough to solve for the sensor's position and orientation. The check tool fits the sphere center in each bootstrap capture, the engineer writes these and the robot positions into boot.json, and the plan tool solves for the sensor and prints the residual of each pair. A residual of tens of millimeters almost always means a position was copied wrongly or the TCP is wrong."
+   "notes": "The software determines the sensor's exact position from the full capture set; this step only needs a rough position so that the planned poses land inside the field of view. Four positions not on a line are enough to solve for the sensor's position and orientation. The check tool fits the sphere center in each bootstrap capture, the engineer writes these and the robot positions into boot.json, and the plan tool solves for the sensor and prints the residual of each pair. A residual of tens of millimeters almost always means a position was copied wrongly or the TCP is wrong. The moves are short because the 152 mm sphere fills much of the picture at 500 mm; it must stay fully in view."
   },
   {
    "id": "plan",
    "layout": "title_only",
    "section": "Capture",
-   "title": "The plan spreads 186 poses through the volume",
+   "title": "The plan spreads 200 poses through the volume",
    "image": "assets/plan_example.png",
    "stats": [
     {
-     "value": "90",
-     "label": "sphere A poses at 300, 425 and 550 mm"
+     "value": "151",
+     "label": "sphere poses at nine stations from 300 to 1,100 mm"
     },
     {
-     "value": "57",
-     "label": "sphere B poses from 500 to 1,100 mm"
+     "value": "49",
+     "label": "board poses at 5 depths, tilted 0, 20 and 40 degrees"
     },
     {
-     "value": "39",
-     "label": "board poses at 4 depths, tilted 0, 20 and 40 degrees"
+     "value": "x 1.19",
+     "label": "distance from one sphere station to the next"
     }
    ],
    "caption": "About 20 percent of poses are held out to test the fit; they are captured like all the others.",
-   "notes": "The plan tool writes poses.csv, a summary, and the picture shown here, which plots the planned sphere and board centers in the sensor's frame: a side view on the left and a front view on the right, with the field of view drawn. Sphere A covers the near range on a grid 1.5 radii apart, sphere B the far range, and both appear at 500 to 550 mm. Board poses that would leave the field of view are dropped automatically. A handful of the outermost sphere poses may touch the image border; the check flags them and they are left out of the fit. Poses with a black edge in the picture are the held-out ones."
+   "notes": "The plan tool writes poses.csv, a summary, and the picture shown here, which plots the planned sphere and board centers in the sensor's frame: a side view on the left and a front view on the right, with the field of view drawn. The one sphere is swept through nine stations, 300, 357, 424, 505, 600, 714, 849, 1,009 and 1,100 mm, each about 1.19 times farther than the last; this sweep measures how the sphere's apparent curvature affects depth, which is why it is part of the calibration. At each station the sphere sits on a grid 1.5 radii apart, limited to the room its image leaves; near the sensor the grid shrinks to 3 by 3 overlapping placements, and a board depth at 425 mm adds near-range data. Every sphere pose is planned to stay fully in view; the check flags any that touch the border. Poses with a black edge in the picture are the held-out ones."
   },
   {
    "id": "robot_program",
@@ -230,15 +230,15 @@
      "icon": "input",
      "points": [
       "poses.csv from the plan tool: base-frame position and orientation of every pose, as a matrix, a quaternion and a rotation vector",
-      "Three tool frames: TCP_SPHERE_A_76mm, TCP_SPHERE_B_152mm and TOOL_BOARD"
+      "Two tool frames: TCP_SPHERE_B_152mm and TOOL_BOARD"
      ]
     },
     {
      "head": "Behavior",
      "icon": "cogs",
      "points": [
-      "Visit poses in plan order: sphere A, sphere B, board",
-      "Pause for each fixture change and activate its tool frame",
+      "Visit poses in plan order: the sphere stations near to far, then the board",
+      "Pause for the fixture change and activate the board's tool frame",
       "Same approach every time; settle 1.5 seconds",
       "Never change the base frame during the session"
      ]
@@ -288,12 +288,12 @@
      "label": "per pose"
     },
     {
-     "value": "~25 min",
-     "label": "robot time for 186 poses"
+     "value": "~27 min",
+     "label": "robot time for 200 poses"
     }
    ],
-   "message": "Order: all sphere A poses, then sphere B, then the board. Never move the sensor in between.",
-   "notes": "The approach is the same every time so that any small hysteresis in the robot is the same for every pose. The settle time lets vibration from the move die out before the sensor captures. The pose that goes in the log is the one the robot reports after it has arrived, not the one it was commanded to; with a robot of 0.1 mm absolute accuracy the difference matters. Remember to activate the right tool frame at each fixture change: TCP_SPHERE_B_152mm for sphere B and TOOL_BOARD for the board."
+   "message": "Order: all sphere poses, then the board. Never move the sensor in between.",
+   "notes": "The approach is the same every time so that any small hysteresis in the robot is the same for every pose. The settle time lets vibration from the move die out before the sensor captures. The pose that goes in the log is the one the robot reports after it has arrived, not the one it was commanded to; with a robot of 0.1 mm absolute accuracy the difference matters. Remember to activate the right tool frame: TCP_SPHERE_B_152mm for the sphere, and TOOL_BOARD after the change to the board."
   },
   {
    "id": "manifest",
@@ -319,7 +319,7 @@
      ]
     }
    ],
-   "example": "s038_z0425_017,sphere,38.10,,,812.40,-33.21,455.02,none,,,,",
+   "example": "s076_z0424_005,sphere,76.20,,,812.40,-33.21,455.02,none,,,,",
    "notes": "Both options are supported by the software. In option B the pose log columns are the pose id, the target kind, the radius or the board half-sizes, the reported position, the rotation type and up to four rotation values (nine for the matrix form); the example line is a sphere pose, which needs no rotation. The manifest tool converts every orientation form to a matrix and complains by name about any pose without files, any file without a pose, and any missing size. A pose log is worth keeping even when the headers carry the pose, because it is the only independent record."
   },
   {
@@ -341,7 +341,7 @@
     {
      "head": "Sphere center off",
      "flag": "more than 2 mm",
-     "text": "One pose: position copied wrongly. One sphere: wrong TCP. Growing across the volume: base frame or robot accuracy"
+     "text": "One pose: position copied wrongly. Every sphere pose: wrong TCP. Growing across the volume: base frame or robot accuracy"
     },
     {
      "head": "Board normal off",
@@ -349,8 +349,8 @@
      "text": "Board tool frame orientation wrong, or the rotation type in the log is misnamed"
     }
    ],
-   "caption": "Re-capture a flagged pose under a new id, for example s038_z0425_017r; never delete lines from the log.",
-   "notes": "The check tool prints one line per pose and a verdict, and its exit code is 0 when nothing is flagged, 1 when something is, and 2 when it cannot read the manifest. Running it while the fixtures are still mounted means a bad pose can be captured again in minutes instead of setting everything up again another day. The pattern of the sphere-center flags tells you the cause: one pose, one sphere, or a trend across the volume."
+   "caption": "Re-capture a flagged pose under a new id, for example s076_z0424_005r; never delete lines from the log.",
+   "notes": "The check tool prints one line per pose and a verdict, and its exit code is 0 when nothing is flagged, 1 when something is, and 2 when it cannot read the manifest. Running it while the fixtures are still mounted means a bad pose can be captured again in minutes instead of setting everything up again another day. The pattern of the sphere-center flags tells you the cause: one pose, every sphere pose, or a trend across the volume."
   },
   {
    "id": "independent",
@@ -364,7 +364,7 @@
      "points": [
       "Each held-out sphere is fitted with its radius free",
       "After correction the fitted radius should match the measured radius",
-      "Judge each error against its standard error, which is large for a small or distant sphere"
+      "Judge each error against its standard error, which is large for a distant sphere"
      ]
     },
     {
@@ -378,7 +378,7 @@
     }
    ],
    "message": "Neither check tests the scale of the volume or a smooth robot error; those rest on the robot's 0.1 mm accuracy.",
-   "notes": "Nothing in the session has a geometry known independently of the robot, so these two checks use no robot positions at all; the fit's report computes them on the held-out poses, so nothing extra is captured. The technician's part is to make the references good: measure the sphere diameters carefully and keep the board's flatness report. A uniform range-scale error of 0.1 percent changes sphere A's fitted radius by only 0.04 mm, so scale is checked mainly by the held-out sphere centers against the robot."
+   "notes": "Nothing in the session has a geometry known independently of the robot, so these two checks use no robot positions at all; the fit's report computes them on the held-out poses, so nothing extra is captured. The technician's part is to make the references good: measure the sphere diameter carefully and keep the board's flatness report. A uniform range-scale error of 0.1 percent changes the sphere's fitted radius by only 0.08 mm, so scale is checked mainly by the held-out sphere centers against the robot."
   },
   {
    "id": "spoilers",
@@ -400,7 +400,7 @@
     },
     {
      "icon": "tool",
-     "text": "A loose adapter or a bent stem: roll the stem on a flat surface first"
+     "text": "A loose adapter or a bent stem: if knocked, re-run the nest check"
     },
     {
      "icon": "hand",
@@ -412,7 +412,7 @@
     },
     {
      "icon": "swap",
-     "text": "Mixing up the two spheres' radii in the pose log"
+     "text": "Logging the nominal radius instead of half the measured diameter"
     }
    ],
    "notes": "These are the failures that cannot be repaired afterwards in software. The first two change the sensor itself mid-session, which invalidates the comparison between early and late captures. The third and seventh put wrong numbers into the pose table. The others damage the measurement: a joint that moves shifts the sphere center away from the TCP that was measured, a shiny spot returns a highlight and a bad read, and a visible stem corrupts the sphere fit."
@@ -425,10 +425,10 @@
    "checklist": [
     "captures/ with every .mc file, named <pose_id>_Index<nn>.mc",
     "pose_log.csv, or confirmation that the headers carry robotPose",
-    "captures/manifest.csv, built without errors",
-    "captures/check.json with no flags, or a note on each",
+    "manifest.csv built without errors; check.json clean, or each flag explained",
     "plan/ files as used, boot.json and the bootstrap captures",
-    "session_notes.txt: sensor serial, warm-up, exposure, gain and SGM parameters, base frame, TCPs, TCP routine errors, board D, runout, board dimensions, sphere diameters, temperature, fixture changes with times, pose log location",
+    "session_notes.txt, with every item of procedure section 10: settings, frames, TCP, board D and runout, sizes, sphere diameter, temperature, fixture changes",
+    "Inspection reports (sphere, SC1-02, -04, -05, -06) and the board's flatness report",
     "Photos: sensor mount, flange fixtures, nest, the run-out fixture"
    ],
    "software": {
@@ -439,7 +439,7 @@
      "Every tool prints its options with --help"
     ]
    },
-   "notes": "The checklist is section 10 of the procedure. The session notes matter as much as the data: the fit needs the measured sphere diameters, and the notes are the only record of warm-up time, temperature and fixture changes if a result looks wrong later. The three command-line tools come with the repository; appendix C of the procedure walks through installing Python, creating an environment, installing the package and running the self-test, on Windows or Linux."
+   "notes": "The checklist is section 10 of the procedure, which lists every item of the session notes: sensor serial, warm-up time, exposure, gain and SGM parameters, the base frame, the TCP and its routine error, board D and the runout reading, the board's dimensions, the sphere diameter measurements, temperature, fixture changes with times, and where the pose log was written. The session notes matter as much as the data: the fit needs the measured sphere diameter, and the notes are the only record of warm-up time, temperature and fixture changes if a result looks wrong later. The three command-line tools come with the repository; appendix C of the procedure walks through installing Python, creating an environment, installing the package and running the self-test, on Windows or Linux."
   }
  ]
 }

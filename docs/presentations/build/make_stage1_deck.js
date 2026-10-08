@@ -165,10 +165,9 @@ const TABLE_BORDER_PT = 0.5; // table rule weight
 // ---------------------------------------------------------------------------------------------
 // Per-slide settings
 // ---------------------------------------------------------------------------------------------
-// Title slide graphic (sphere B, sphere A and board, bottom-aligned): sizes in inches
+// Title slide graphic (the sphere and the board, bottom-aligned): sizes in inches
 const TITLE_ART = {
 	sphereBD: 2.7, // large sphere diameter (sized so the graphic fits between subtitle and footer)
-	sphereAD: 1.35, // small sphere diameter
 	boardW: 2.1, // board width
 	boardH: 1.5, // board height
 	gapBelowSubtitle: GAP, // gap between subtitle and the top of the graphic
@@ -317,7 +316,7 @@ const BUY_LIST = {
 
 // Sphere purchase specification: long text, full content width, requirement column in bold.
 const SPHERE_SPEC = {
-	colW: [2.3, 5.4, 4.633], // Requirement, Sphere A, Sphere B (sums to CONTENT_W)
+	colW: [2.6, 9.733], // Requirement, Sphere B (sums to CONTENT_W)
 	cellPt: BODY_MIN_PT,
 };
 
@@ -773,7 +772,7 @@ async function buildDeck(contentJson, outputPptx) {
 		title(slide, s.title);
 		slide.addText(s.subtitle, { placeholder: "subtitle" });
 		slide.addText(s.footer, { placeholder: "footer" });
-		// Graphic: sphere B, sphere A and the board, sitting on one baseline (native shapes).
+		// Graphic: the sphere and the board, sitting on one baseline (native shapes).
 		const a = TITLE_ART;
 		const baseline = DARK_FOOTER_Y - a.bottomGap;
 		const sphereBX = MARGIN;
@@ -783,9 +782,7 @@ async function buildDeck(contentJson, outputPptx) {
 		const bcy = baseline - a.sphereBD / 2;
 		slide.addShape(R.rect, { x: bcx - a.crossLen / 2, y: bcy - a.crossThick / 2, w: a.crossLen, h: a.crossThick, fill: { color: C.background1 }, line: { type: "none" }, objectName: "Graphic sphere B cross horizontal" });
 		slide.addShape(R.rect, { x: bcx - a.crossThick / 2, y: bcy - a.crossLen / 2, w: a.crossThick, h: a.crossLen, fill: { color: C.background1 }, line: { type: "none" }, objectName: "Graphic sphere B cross vertical" });
-		const sphereAX = sphereBX + a.sphereBD + GAP;
-		slide.addShape(R.ellipse, { x: sphereAX, y: baseline - a.sphereAD, w: a.sphereAD, h: a.sphereAD, fill: { color: C.accent1 }, line: { color: C.accent6, width: a.outlinePt }, objectName: "Graphic sphere A" });
-		const boardX = sphereAX + a.sphereAD + GAP;
+		const boardX = sphereBX + a.sphereBD + GAP;
 		slide.addShape(R.roundRect, { x: boardX, y: baseline - a.boardH, w: a.boardW, h: a.boardH, rectRadius: a.boardRadius, fill: { color: C.accent6 }, line: { color: C.accent3, width: a.outlinePt }, objectName: "Graphic board" });
 	};
 
@@ -910,7 +907,7 @@ async function buildDeck(contentJson, outputPptx) {
 		title(slide, s.title);
 		const t = SPHERE_SPEC;
 		const area = tableArea(s.caption);
-		dataTable(slide, s, { name: "Sphere specification table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left", "left"], colBold: [true, false, false], colColor: [C.text2] });
+		dataTable(slide, s, { name: "Sphere specification table", x: CONTENT_X, y: CONTENT_TOP, h: area.tableH, colW: t.colW, cellPt: t.cellPt, colAlign: ["left", "left"], colBold: [true, false], colColor: [C.text2] });
 		caption(slide, "Sphere specification caption", s.caption, CONTENT_X, area.captionY, CONTENT_W, area.captionH, { valign: "bottom" });
 	};
 
