@@ -4,23 +4,23 @@ Camera: 640 x 480 px, half field 24.9 x 19.2 deg
 
 Sphere poses per station:
   radius_mm  depth_mm  planned   kept  dropped  held out
-       76.2       300        9      9        0         4
-       76.2       357        9      9        0         3
-       76.2       424        9      9        0         0
-       76.2       505        9      9        0         2
-       76.2       600       13     13        0         1
-       76.2       714       15     15        0         2
-       76.2       849       21     21        0         3
-       76.2      1009       31     31        0         8
-       76.2      1100       35     35        0         6
+       76.2       300        9      9        0         6
+       76.2       357        9      9        0         2
+       76.2       424        9      9        0         1
+       76.2       505        9      9        0         1
+       76.2       600       13     13        0         2
+       76.2       714       15     15        0         3
+       76.2       849       21     21        0         1
+       76.2      1009       31     31        0        10
+       76.2      1100       35     35        0         5
 
 Board poses per depth:
    depth_mm  planned   kept  skipped  held out
-        350       10      9        1         2
-        425       10     10        0         4
-        550       10     10        0         1
-        800       10     10        0         4
-       1050       10     10        0         0
-  1 board combinations were skipped because a corner would leave the field of view (margin 10 px); use fewer lateral positions, a smaller tilt, or a larger depth to keep them.
+        350       14     10        4         2
+        425       14     14        0         3
+        550       14     14        0         3
+        800       14     14        0         1
+       1050       14     14        0         3
+  4 board combinations were skipped because a corner would leave the field of view (margin 10 px); use fewer lateral positions, a smaller tilt, or a larger depth to keep them.
 
-Total: 200 poses (151 sphere, 49 board), 40 tagged held out (seed 0).
+Total: 217 poses (151 sphere, 66 board), 43 tagged held out (seed 0).

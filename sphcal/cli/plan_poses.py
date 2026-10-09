@@ -201,8 +201,10 @@ class PlanParameters:
     """Sensor-z depths of the board centers. The extra near-range depth (425 mm)
     compensates for the single large sphere, which places few distinct poses at
     near range."""
-    board_tilts_deg: tuple[float, ...] = (0.0, 20.0, 40.0)
-    """Board tilts away from facing the sensor."""
+    board_tilts_deg: tuple[float, ...] = (0.0, 20.0, 40.0, 50.0)
+    """Board tilts away from facing the sensor. The 50 degree tilt measures the planar
+    correction between 40 degrees and the 55 degree incidence cut-off directly; without
+    it that band is inferred from the sphere alone (simulation of 2026-10-08)."""
     board_azimuths_deg: tuple[float, ...] = (0.0, 90.0)
     """Azimuths of the tilt axis in the board plane (0 = board x axis)."""
     board_lateral_positions: int = 2

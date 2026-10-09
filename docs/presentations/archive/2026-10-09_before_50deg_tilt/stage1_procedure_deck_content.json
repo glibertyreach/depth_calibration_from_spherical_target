@@ -16,7 +16,7 @@
    "title": "The session produces data plus an exact table of poses",
    "stats": [
     {
-     "value": "217",
+     "value": "200",
      "label": "robot poses, 5 frames each"
     },
     {
@@ -61,7 +61,7 @@
     {
      "n": 5,
      "head": "Plan poses",
-     "text": "The plan tool writes 217 poses and a picture"
+     "text": "The plan tool writes 200 poses and a picture"
     },
     {
      "n": 6,
@@ -200,7 +200,7 @@
    "id": "plan",
    "layout": "title_only",
    "section": "Capture",
-   "title": "The plan spreads 217 poses through the volume",
+   "title": "The plan spreads 200 poses through the volume",
    "image": "assets/plan_example.png",
    "stats": [
     {
@@ -208,8 +208,8 @@
      "label": "sphere poses at nine stations from 300 to 1,100 mm"
     },
     {
-     "value": "66",
-     "label": "board poses at 5 depths, tilted 0, 20, 40 and 50 degrees"
+     "value": "49",
+     "label": "board poses at 5 depths, tilted 0, 20 and 40 degrees"
     },
     {
      "value": "x 1.19",
@@ -217,7 +217,7 @@
     }
    ],
    "caption": "About 20 percent of poses are held out to test the fit; they are captured like all the others.",
-   "notes": "The plan tool writes poses.csv, a summary, and the picture shown here, which plots the planned sphere and board centers in the sensor's frame: a side view on the left and a front view on the right, with the field of view drawn. The one sphere is swept through nine stations, 300, 357, 424, 505, 600, 714, 849, 1,009 and 1,100 mm, each about 1.19 times farther than the last; this sweep measures how the sphere's apparent curvature affects depth, which is why it is part of the calibration. At each station the sphere sits on a grid 1.5 radii apart, limited to the room its image leaves; near the sensor the grid shrinks to 3 by 3 overlapping placements, and a board depth at 425 mm adds near-range data. The 50 degree board tilt measures the correction of flat surfaces between 40 degrees and the 55 degree cut-off directly; part of a 50 degree board does not read, which is expected. A simulation of this plan recovered a known error field to within the accuracy target everywhere, including on tilted boards it had never seen. Every sphere pose is planned to stay fully in view; the check flags any that touch the border. Poses with a black edge in the picture are the held-out ones."
+   "notes": "The plan tool writes poses.csv, a summary, and the picture shown here, which plots the planned sphere and board centers in the sensor's frame: a side view on the left and a front view on the right, with the field of view drawn. The one sphere is swept through nine stations, 300, 357, 424, 505, 600, 714, 849, 1,009 and 1,100 mm, each about 1.19 times farther than the last; this sweep measures how the sphere's apparent curvature affects depth, which is why it is part of the calibration. At each station the sphere sits on a grid 1.5 radii apart, limited to the room its image leaves; near the sensor the grid shrinks to 3 by 3 overlapping placements, and a board depth at 425 mm adds near-range data. Every sphere pose is planned to stay fully in view; the check flags any that touch the border. Poses with a black edge in the picture are the held-out ones."
   },
   {
    "id": "robot_program",
@@ -288,8 +288,8 @@
      "label": "per pose"
     },
     {
-     "value": "~29 min",
-     "label": "robot time for 217 poses"
+     "value": "~27 min",
+     "label": "robot time for 200 poses"
     }
    ],
    "message": "Order: all sphere poses, then the board. Never move the sensor in between.",

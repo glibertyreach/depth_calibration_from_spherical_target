@@ -50,8 +50,11 @@ class SmoothingSelection:
     "none": keep the configured initial smoothing."""
     folds: int = 3
     """Number of pose folds for "pose_cv"."""
-    grid: SmoothingGrid = field(default_factory=lambda: SmoothingGrid(log10_min=-3.0, log10_max=4.0, n_values=8, n_rounds=1))
-    """Multipliers 10^g applied to each term's smoothing vector, searched term by term."""
+    grid: SmoothingGrid = field(default_factory=lambda: SmoothingGrid(log10_min=-3.0, log10_max=6.0, n_values=10, n_rounds=1))
+    """Multipliers 10^g applied to each term's smoothing vector, searched term by term, in
+    one-decade steps from 10^-3 to 10^6. The ceiling was raised from 10^4 after the
+    simulation of 2026-10-08, in which the search chose 10^4 for the position and slope
+    terms: a choice at the grid's edge means the data wanted more smoothing than offered."""
     seed: int = 7
 
 

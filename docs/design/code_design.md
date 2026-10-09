@@ -410,3 +410,16 @@ the runtime evaluator, whose per-pixel work is trivially parallel.
   curvature and converts it per pixel. The map JSON stores per-dimension degrees and a camera block
   (section 7). The end-to-end synthetic test's injected field still uses the physical curvature 1/R; the test
   converts the sample input back with the measured range before calling it.
+
+## 12. Changes of 2026-10-09 (after the one-sphere simulation)
+
+- The simulation of the planned session (`docs/analysis/simulations/2026-10-08_one_sphere/`) found the
+  one-sphere plan sufficient, with two weak points that these changes address.
+- `PlanParameters.board_tilts_deg` gains 50 degrees (0, 20, 40, 50). Without it no board sample lies between
+  40 degrees and the 55 degree incidence cut-off, so the planar correction there was inferred from the sphere
+  alone. The example plan grows from 200 to 217 poses (66 board poses).
+- The smoothing search grids reach 10^6 instead of 10^4: the production pose-fold grid
+  (`SmoothingSelection.grid`, now 10^-3 to 10^6 in ten one-decade steps) and the GCV default
+  (`SmoothingGrid`, now 10^-4 to 10^6 in eleven steps). In the simulation the pose-fold search chose 10^4,
+  the edge of the old grid, for the position and slope terms, which means the data wanted more smoothing
+  than the grid offered.
