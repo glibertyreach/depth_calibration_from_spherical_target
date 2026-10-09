@@ -106,8 +106,8 @@ class SmoothingGrid:
     """Logarithmic grid of the GCV smoothing search."""
 
     log10_min: float = -4.0  # smallest multiplier is 10 ** log10_min
-    log10_max: float = 6.0  # largest multiplier is 10 ** log10_max (raised from 4 so a smooth field is not clipped at the edge)
-    n_values: int = 11  # grid points per term per round (one-decade steps)
+    log10_max: float = 4.0  # largest multiplier is 10 ** log10_max
+    n_values: int = 9  # grid points per term per round
     n_rounds: int = 2  # passes over all terms (stops early when nothing changes)
 
 

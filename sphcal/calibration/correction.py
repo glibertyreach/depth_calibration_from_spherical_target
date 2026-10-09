@@ -50,11 +50,14 @@ class SmoothingSelection:
     "none": keep the configured initial smoothing."""
     folds: int = 3
     """Number of pose folds for "pose_cv"."""
-    grid: SmoothingGrid = field(default_factory=lambda: SmoothingGrid(log10_min=-3.0, log10_max=6.0, n_values=10, n_rounds=1))
+    grid: SmoothingGrid = field(default_factory=lambda: SmoothingGrid(log10_min=-3.0, log10_max=4.0, n_values=8, n_rounds=1))
     """Multipliers 10^g applied to each term's smoothing vector, searched term by term, in
-    one-decade steps from 10^-3 to 10^6. The ceiling was raised from 10^4 after the
-    simulation of 2026-10-08, in which the search chose 10^4 for the position and slope
-    terms: a choice at the grid's edge means the data wanted more smoothing than offered."""
+    one-decade steps from 10^-3 to 10^4. In the simulation of 2026-10-08 the search chose
+    the 10^4 ceiling for the position and slope terms. Raising the ceiling to 10^6 was
+    tried and withdrawn: the search then chose 10^6 and the far range got worse (probe
+    spheres at 950 mm 0.106 mm against 0.072 mm), because the pose-fold score is dominated
+    by the many near-range samples. The edge choice is a property of that score, not of
+    the grid; see docs/design/code_design.md, section 12."""
     seed: int = 7
 
 

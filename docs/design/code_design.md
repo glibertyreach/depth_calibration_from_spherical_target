@@ -414,12 +414,17 @@ the runtime evaluator, whose per-pixel work is trivially parallel.
 ## 12. Changes of 2026-10-09 (after the one-sphere simulation)
 
 - The simulation of the planned session (`docs/analysis/simulations/2026-10-08_one_sphere/`) found the
-  one-sphere plan sufficient, with two weak points that these changes address.
+  one-sphere plan sufficient, with two weak points: the board's 40 degree limit, addressed below, and the
+  smoothing search's choice of its grid ceiling, which is explained below and left open.
 - `PlanParameters.board_tilts_deg` gains 50 degrees (0, 20, 40, 50). Without it no board sample lies between
   40 degrees and the 55 degree incidence cut-off, so the planar correction there was inferred from the sphere
   alone. The example plan grows from 200 to 217 poses (66 board poses).
-- The smoothing search grids reach 10^6 instead of 10^4: the production pose-fold grid
-  (`SmoothingSelection.grid`, now 10^-3 to 10^6 in ten one-decade steps) and the GCV default
-  (`SmoothingGrid`, now 10^-4 to 10^6 in eleven steps). In the simulation the pose-fold search chose 10^4,
-  the edge of the old grid, for the position and slope terms, which means the data wanted more smoothing
-  than the grid offered.
+- The smoothing search grids stay at 10^4. In the simulation the pose-fold search chose that ceiling for the
+  position and slope terms. Raising the ceiling to 10^6 was tried and withdrawn: the search then chose 10^6,
+  and the far range got worse (probe spheres at 950 mm 0.106 mm against 0.072 mm with the 50 degree tilt and
+  the 10^4 ceiling), while the 50 degree tilt alone gave all of the improvement at steep incidence. The cause
+  is the pose-fold score: it sums inverse-variance-weighted squared errors over samples, and the near range,
+  where a pose covers many more pixels, dominates it, so the score keeps rewarding smoothing that costs the
+  far range little in the sum. A score that gives each pose, or each depth band, equal weight would remove
+  that bias; it is an open design item, not yet implemented. The outputs of the trial are archived in
+  `docs/analysis/simulations/2026-10-08_one_sphere/archive/`.
